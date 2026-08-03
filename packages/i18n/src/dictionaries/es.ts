@@ -13,6 +13,7 @@ export const es: Dictionary = {
     resources: "Recursos",
     signIn: "Iniciar sesión",
     getStarted: "Empezar gratis",
+    signOut: "Cerrar sesión",
     comingSoon: "Próximamente",
     languageLabel: "Idioma",
   },
@@ -182,5 +183,14 @@ export const es: Dictionary = {
     errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
     errorCallback: "Ese enlace de acceso es inválido o expiró. Solicita uno nuevo abajo.",
     backToHome: "Volver al inicio",
+  },
+  app: {
+    heading: "Bienvenido de nuevo",
+    workspaceLabel: "Workspace",
+    workspaceFallback:
+      "Todavía no se encontró ningún workspace — esto aparece en cuanto se apliquen las migraciones de la base de datos.",
+    inDevelopmentTitle: "El producto en sí todavía está en desarrollo",
+    inDevelopmentBody:
+      "Tu cuenta funciona — esto confirma que el inicio de sesión, la sesión y el workspace están conectados correctamente. La transcripción y el resto del producto llegan en próximas actualizaciones.",
   },
 };

@@ -13,6 +13,7 @@ export const ptBr: Dictionary = {
     resources: "Conteúdo",
     signIn: "Entrar",
     getStarted: "Começar grátis",
+    signOut: "Sair",
     comingSoon: "Em breve",
     languageLabel: "Idioma",
   },
@@ -182,5 +183,14 @@ export const ptBr: Dictionary = {
     errorGeneric: "Algo deu errado. Tente novamente.",
     errorCallback: "Esse link de acesso é inválido ou expirou. Peça um novo abaixo.",
     backToHome: "Voltar para a home",
+  },
+  app: {
+    heading: "Bem-vindo de volta",
+    workspaceLabel: "Workspace",
+    workspaceFallback:
+      "Nenhum workspace encontrado ainda — isso aparece assim que as migrations do banco forem aplicadas.",
+    inDevelopmentTitle: "O produto em si ainda está em desenvolvimento",
+    inDevelopmentBody:
+      "Sua conta funciona — isso confirma que login, sessão e workspace estão conectados corretamente. Transcrição e o resto do produto chegam nas próximas entregas.",
   },
 };
