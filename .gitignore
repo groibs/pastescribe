@@ -54,3 +54,6 @@ test-results/
 
 # generated design reference
 stitch-reference/extracted/
+
+# TypeScript incremental
+*.tsbuildinfo
