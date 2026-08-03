@@ -20,6 +20,10 @@ export const es: Dictionary = {
       "Precio claro: prueba gratis, pago por video, créditos o planes",
     ],
     languageLabel: "Idioma",
+    previewBadge: "En desarrollo",
+    previewLabel: "Pega el link de un video",
+    previewHint: "Todavía no acepta links — primero viene la base de costos y seguridad.",
+    previewCta: "Generar transcripción",
   },
   footer: {
     honesty:

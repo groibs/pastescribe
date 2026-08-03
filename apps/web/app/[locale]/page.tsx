@@ -7,6 +7,7 @@ import {
   getDictionary,
   isLocale,
 } from "@pastescribe/i18n";
+import { Alert, Badge, Button, UrlInput } from "@pastescribe/ui";
 
 type PageProps = {
   params: Promise<{ locale: string }>;
@@ -51,6 +52,9 @@ export default async function HomePage({ params }: PageProps) {
       </header>
 
       <section className="mt-16">
+        <div className="mb-4">
+          <Badge variant="warning">{dict.home.previewBadge}</Badge>
+        </div>
         <h1 className="text-4xl font-bold leading-tight tracking-tight text-on-surface sm:text-5xl">
           {dict.home.tagline}
         </h1>
@@ -59,13 +63,22 @@ export default async function HomePage({ params }: PageProps) {
         </p>
       </section>
 
-      <section className="mt-12 rounded-lg border border-outline-variant bg-surface-container-lowest p-6">
-        <h2 className="text-xl font-semibold text-on-surface">
-          {dict.home.statusHeading}
-        </h2>
-        <p className="mt-2 text-base leading-6 text-on-surface-variant">
+      <section className="mt-10 flex flex-col gap-3 rounded-xl border border-outline-variant bg-surface-container-lowest p-6">
+        <UrlInput
+          label={dict.home.previewLabel}
+          placeholder="https://…"
+          hint={dict.home.previewHint}
+          disabled
+        />
+        <Button disabled className="self-start">
+          {dict.home.previewCta}
+        </Button>
+      </section>
+
+      <section className="mt-10">
+        <Alert variant="info" title={dict.home.statusHeading}>
           {dict.home.statusBody}
-        </p>
+        </Alert>
       </section>
 
       <section className="mt-10">

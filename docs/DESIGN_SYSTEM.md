@@ -28,7 +28,16 @@ Precisão, eficiência, clareza — "effortless power". Interface clara, técnic
 | `error` / `error-container` | `#ba1a1a` / `#ffdad6` | erro |
 | `tertiary` | `#922f00` | avisos/acentos raros (laranja queimado) |
 
-Semânticos derivados (definir no código): `success`, `warning` com contraste AA — o Stitch não os traz; **decisão**: `success #1a7f37`-família e `warning` âmbar escuro, validados com checker de contraste na implementação.
+Semânticos derivados (o Stitch não os traz) — **decididos e implementados na fatia 1.2** (`apps/web/app/globals.css`, `packages/ui`), com contraste verificado (fórmula WCAG 2.1, texto normal ≥4.5:1):
+
+| Token | Valor | Contraste verificado |
+|---|---|---|
+| `success` | `#1a7f37` | 4,82:1 sobre `surface` (#faf8ff) |
+| `success-container` / `on-success-container` | `#d6f2df` / `#0c5223` | 7,84:1 |
+| `warning` | `#8a5300` | 6,01:1 sobre `surface` |
+| `warning-container` / `on-warning-container` | `#ffefd3` / `#6b4100` | 7,79:1 |
+
+Raio no código usa a nomenclatura padrão do Tailwind v4 (`rounded-md`=8px para botões/inputs, `rounded-xl`=16px para cards grandes) — o mapeamento completo está em `apps/web/app/globals.css`.
 
 ### Tipografia
 
@@ -47,7 +56,7 @@ Semânticos derivados (definir no código): `success`, `warning` com contraste A
 
 ## Componentes (inventário e onda de chegada)
 
-Onda 1: tokens, Button, Input, URLInput, Badge, Alert, Skeleton, layout base.
+Onda 1 (fatia 1.2, entregue): tokens em `apps/web/app/globals.css`; `packages/ui` com Button, Input, UrlInput, Badge, Alert, Skeleton — cada um com testes de estado (default/disabled/loading/erro conforme aplicável) e verificação automática via axe-core (zero violações, `color-contrast` desligado em teste unitário porque jsdom não computa layout real; contraste dos tokens verificado à parte, tabela acima). Integrados de verdade na home (`apps/web/app/[locale]/page.tsx`): Badge de status, Alert informativo, UrlInput+Button desabilitados com hint explicando o motivo (nunca um placeholder que finge funcionar).
 Onda 2–4: Dialog, Tabs, Toast, Dropzone, ProgressSteps, JobStatusChip, EmptyState, ErrorState, Table.
 Onda 6: Player, TranscriptSegment, SpeakerControl, SelectionToolbar, ExportPanel.
 Onda 9–10: PricingCard, CreditMeter, PlanBadge, Charts (admin).

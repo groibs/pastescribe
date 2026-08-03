@@ -20,6 +20,10 @@ export const ptBr: Dictionary = {
       "Preço claro: degustação grátis, pagamento por vídeo, créditos ou planos",
     ],
     languageLabel: "Idioma",
+    previewBadge: "Em construção",
+    previewLabel: "Cole o link de um vídeo",
+    previewHint: "Ainda não aceita links — a fundação de custo e segurança vem primeiro.",
+    previewCta: "Gerar transcrição",
   },
   footer: {
     honesty:
