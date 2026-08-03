@@ -1,64 +1,70 @@
 # HANDOFF — PasteScribe
 
-Última atualização: **2026-08-03** (Onda 0 + fatias 1.1/1.2/2.1/2.2/2.3 mergeadas; fix de widows/orphans do hero em revisão)
+Última atualização: **2026-08-03** (Onda 0 + fatias 1.1/1.2/2.1/2.2/2.3 + fix de hero mergeadas; Onda 3 fatia 3.1/3.2 em revisão)
 
 ## Branch e base
 
-- Base: `main` (PRs #2–#7 já mergeadas)
+- Base: `main` (PRs #2–#8 já mergeadas)
 - Branch desta entrega: `claude/pastescribe-wave-0-vqgzet`
-- Estado: correção de linhas viúvas/órfãs no hero da home completa; PR aberta.
-- **A partir desta sessão, merge de PR é automático** assim que CI estiver verde (autorização explícita do dono no chat — decisão registrada em `docs/DECISIONS.md`). Continua exigindo pausa e pergunta explícita: qualquer coisa que toque o projeto Supabase real, CI vermelho, ou mudança arquiteturalmente significativa/ambígua.
+- Estado: Onda 3 fatia 3.1/3.2 (schema de billing/ledger/orçamento/quota + funções atômicas + testes de abuso) completa; PR aberta.
+- **Merge de PR é automático** assim que CI estiver verde (autorização do dono, `docs/DECISIONS.md`). Pausa e pergunta explícita continuam obrigatórias para: qualquer coisa que toque o projeto Supabase real, CI vermelho, ou mudança arquiteturalmente significativa/ambígua.
 
 ## Infraestrutura (inalterado desde a última entrega)
 
-Vercel (free) + projeto Supabase (free) já criados pelo dono; deploy da Vercel corrigido (Root Directory = `apps/web`); domínio ainda não comprado; `docs/DECISIONS.md` tem os detalhes completos. **Nenhuma migration foi aplicada no projeto Supabase real do dono** — segue pendente.
+Vercel (free) + projeto Supabase (free) já criados pelo dono; domínio ainda não comprado. **Nenhuma migration foi aplicada no projeto Supabase real do dono** — segue pendente de autorização explícita, agora com 5 migrations acumuladas (`0001`–`0005`).
 
-## O que esta entrega contém: linhas viúvas/órfãs no hero (pedido direto do dono)
+## O que esta entrega contém: Onda 3 fatia 3.1/3.2 — billing, ledger, orçamento free e quota
 
-- O dono reportou (com screenshot) que o título do hero da home quebrava deixando uma linha órfã ("text." sozinho na segunda linha em EN). Pediu correção nos 3 locales, título e subtítulo, sem afetar mobile.
-- **`apps/web/app/[locale]/page.tsx`**: `text-balance` (`text-wrap: balance`) no `<h1>` do hero e `text-pretty` (`text-wrap: pretty`) no parágrafo de lead — utilitários nativos do Tailwind v4 (compilação confirmada no CSS gerado, não é suposição). `balance` distribui o título em linhas de comprimento parecido (ideal para headlines curtas); `pretty` evita especificamente a última linha órfã em parágrafos mais longos, sem redistribuir tudo.
-- Escopo deliberadamente restrito ao hero da home, como pedido — não toquei heading/lead de pricing/login (mesmo padrão, se o dono quiser depois).
+Fundação de dados que tem que existir **antes** de qualquer chamada real de IA (Onda 5) — nenhuma chamada de IA acontece nesta fatia, é só o governador de custo/abuso. `docs/ROADMAP.md` divide a Onda 3 em 4 fatias; esta entrega é 3.1 (migrations) + 3.2 (testes), invocada via a skill `pastescribe-ai-cost-governance`.
+
+- **`supabase/migrations/0003`** — `plans`/`prices` (catálogo draft, `is_purchasable=false` até aprovação), `credit_accounts`+`credit_ledger_entries` (créditos pagos, saldo é cache do ledger), `usage_ledger_entries` (custo real: USD em micros fiel à fatura, BRL em centavos pro orçamento), `budget_periods`/`budget_reservations` (orçamento por envelope — `free_ai`/`ingestion`/`infra`/`reserve` — e período), `free_tier_configs` (seed: anônimo 45s, e-mail verificado 180s não renovável, legenda nativa 0s — `docs/AI_COST_MODEL.md` §4), `quota_counters`+`quota_consumption_entries` (contador durável por bucket+janela com log de idempotência).
+- **`0004`** — RLS: todas as 10 tabelas novas nascem service_role-only (deny-by-default, nenhuma tem consumidor client ainda — nem `plans`/`prices`, que um dia serão de leitura pública).
+- **`0005`** — funções atômicas: `consume_quota`, `ledger_append`, `reserve_free_budget`, `capture_budget_reservation`, `release_budget_reservation`. Todas `SECURITY DEFINER`, idempotentes (`idempotency_key` único — duplo clique/retry devolve o mesmo resultado em vez de duplicar), `FOR UPDATE` (trava a linha certa antes de decidir), fail-closed (`RAISE EXCEPTION` em vez de permitir silenciosamente), executáveis só por `service_role`.
+- **Decisão importante:** `reserve_free_budget_and_enqueue` (nome do `docs/DATABASE.md`) **não foi construída** — depende de `transcription_jobs`, que só existe na Onda 4. Esta fatia entrega as peças completas e testadas (`reserve_free_budget` + `capture_budget_reservation` + `release_budget_reservation`); a Onda 4 monta a versão combinada chamando estas de dentro da criação/conclusão do job, em vez de duplicar a lógica. Detalhes em `docs/DECISIONS.md`.
+- **Fora de escopo desta fatia** (deliberado): `billing_customers`/`subscriptions`/`payment_events` (fatia 3.3, com o provider de billing fake); `abuse_signals`/`abuse_events` (sem lógica de abuso real pra escrever ainda); Turnstile/rate limits (fatia 3.4).
 
 ## Entregas anteriores (mergeadas)
 
-- **Fatia 2.3** — estado autenticado no header (`AuthHeaderStatus`, lido no client para não tirar home/pricing de SSG), `signOutAction`, página `/{locale}/app` mínima e real (workspace pessoal via RLS, sem dado fake), decisão de deixar `/admin` de fora (sem agregados reais ainda). Corrigido também um bug real de contraste pré-existente (`text-outline` como texto, `opacity-60` no demo) achado ao vivo com axe-core.
-- **Fatia 2.2** — Supabase Auth SSR: `packages/database` (tipos handwritten), clients browser/server/`proxy.ts`, página `/{locale}/login` (magic link, Google, senha opcional), `/auth/callback`. `SUPABASE_URL`/`ANON_KEY` renomeados para `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`.
-- **Fatia 1.4** — reconstrução fiel ao Google Stitch: home, pricing, `SiteHeader`/`SiteFooter`, `TranscribeBar`, `Logomark`, fontes self-hosted, tokens de cor.
+- **Fix de hero** — `text-balance`/`text-pretty` no título/subtítulo da home, corrigindo linhas viúvas/órfãs (pedido direto do dono).
+- **Fatia 2.3** — estado autenticado no header, `/{locale}/app` mínimo, correção de um bug real de contraste (`text-outline`/`opacity-60`).
+- **Fatia 2.2** — Supabase Auth SSR completo (`packages/database`, clients, `/login`, `/auth/callback`).
+- **Fatia 1.4** — reconstrução fiel ao Google Stitch.
 
 Detalhes completos em commits/PRs anteriores (`git log`) e em `docs/DECISIONS.md`.
 
 ## Verificação real feita nesta sessão (não só "deveria funcionar")
 
-- `pnpm install && pnpm lint && pnpm typecheck && pnpm test && pnpm build` no monorepo inteiro: todos verdes, **61 testes**.
-- Confirmei no CSS gerado (`.next/static/chunks/*.css`) que `text-wrap:balance` e `text-wrap:pretty` realmente compilam — não é só a classe existir no HTML sem efeito.
-- **Servidor real + Playwright, screenshot do `<h1>` isolado nos 3 locales** (viewport 1440px, mesma largura do screenshot do dono): EN quebra em "Paste any video." / "Get useful text." (2 linhas balanceadas, sem órfã); PT-BR e ES também balanceados, sem linha de 1 palavra sozinha.
-- Screenshot da seção hero completa em desktop (1440px) e mobile (375px): título, subtítulo e o resto do hero (input, plataformas) continuam corretos nos dois breakpoints — `text-balance`/`text-pretty` são progressive enhancement, não quebram em telas estreitas.
-- axe-core ao vivo em `/en`, `/pt-br`, `/es`: **0 violações** (mudança é só CSS de quebra de linha, não deveria afetar a11y, mas testei mesmo assim).
+- **Migrations aplicadas de verdade** contra Postgres nativo local (`scripts/test-db-local.sh`, mesmo script que o CI roda) — `0003`/`0004`/`0005` rodam sem erro sobre o schema real das fatias 2.1/2.2.
+- **101 testes pgTAP** (46 anteriores + 55 novos em `supabase/tests/07`–`10`), cobrindo os cenários do prompt-mestre §21.4 que fazem sentido em nível de banco: duplo clique/retry (idempotência) em todas as 5 funções, orçamento mensal encerrado, reserva maior que saldo disponível, contador/orçamento indisponível (período não configurado), refund de job falho (`release_budget_reservation`), captura idempotente (reprocessar não desconta duas vezes), free bloqueado não afeta paid (`ledger_append` funciona independente do estado de `budget_periods`), RLS deny-by-default nas 10 tabelas novas (`anon`/`authenticated` barrados, `service_role` passa).
+- **Nota de honestidade sobre "concorrência"**: os testes verificam que a lógica sequencial sob `FOR UPDATE` está correta (reservar até o teto, depois rejeitar) — é o mesmo invariante que torna `FOR UPDATE` seguro sob duas conexões concorrentes de verdade, mas não é um teste com duas conexões paralelas reais (nenhum arquivo pgTAP deste repositório faz isso; é um teste de nível mais pesado, não construído aqui).
+- `pnpm lint && pnpm typecheck && pnpm test && pnpm build` no monorepo inteiro: todos verdes (61 testes JS/TS + 101 pgTAP).
+- `packages/database/src/types.ts` atualizado à mão com as 10 tabelas e 5 funções novas — typecheck confirma que `apps/web` (que importa `@pastescribe/database`) continua compilando.
 
 ## Como testar
 
 ```bash
 pnpm install
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
-pnpm --filter @pastescribe/web dev   # /en, /pt-br, /es — olhar o hero em ~1440px de largura
+bash scripts/test-db-local.sh   # migrations + pgTAP (precisa de PostgreSQL local com pgtap — ver o script)
 ```
 
 ## Riscos e limitações
 
-- **Nenhuma migration foi aplicada no projeto Supabase real do dono** — segue pendente de autorização explícita (fatia 2.2/2.3).
-- Auth real (login completo + `/app` com sessão) não foi exercitada contra o GoTrue/Postgres reais — sem credenciais neste sandbox.
-- Preços da pricing continuam ilustrativos (herdado, inalterado).
-- `text-balance` tem suporte limitado a ~6 linhas pelo spec CSS (não é problema aqui — o título tem 1-2 linhas); `text-pretty` tem suporte um pouco mais recente em navegadores mas ambos são progressive enhancement — navegadores sem suporte simplesmente quebram a linha do jeito padrão (nunca quebra o layout).
+- **Nenhuma migration foi aplicada no projeto Supabase real do dono** — `0001`–`0005` só rodaram neste sandbox. Segue pendente de autorização explícita.
+- Nenhuma função desta fatia tem um caller real ainda (nenhuma API route/Server Action as chama) — isso só faz sentido a partir da Onda 4/5, quando `transcription_jobs` e a API de transcrição existirem. Construídas e testadas agora porque são pré-requisito bloqueante, não porque já têm consumidor.
+- `identity_key`/`bucket` são opacos ao banco — a derivação real (hash de IP, salt, formato) é decisão de quem chamar essas funções, ainda **A confirmar** (Onda 4/5).
+- Câmbio BRL/USD usado para converter estimativa de custo em `reserve_free_budget` é decisão da camada chamadora (ainda não existe) — `docs/AI_COST_MODEL.md` já avisa que o câmbio de planejamento precisa revalidação mensal.
 
 ## Restrições que não podem ser violadas (inalteradas)
 
-Não trabalhar em `main`; não alterar DNS/produção; não inserir segredos; não prometer feature que não existe; não liberar IA gratuita sem os gates da Onda 3; não aplicar migrations no projeto Supabase real sem autorização explícita.
+Não trabalhar em `main`; não alterar DNS/produção; não inserir segredos; não prometer feature que não existe; não liberar IA gratuita sem os gates completos da Onda 3 (esta fatia é parte do gate, não o gate inteiro — falta 3.3/3.4); não aplicar migrations no projeto Supabase real sem autorização explícita.
 
 ## Próximo passo exato
 
-1. Onda 3: gates de custo/orçamento para IA gratuita (ledger, reserva atômica, kill switches) — bloqueante antes de qualquer chamada real de transcrição, mesmo que a UI ainda não exista.
-2. Quando o dono autorizar: aplicar `supabase/migrations/0001_initial_schema.sql` e `0002_workspace_rls.sql` no projeto Supabase real, preencher `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` na Vercel, habilitar o provider Google, testar o fluxo completo de auth de ponta a ponta.
+1. Onda 3 fatia 3.3: provider de billing fake + webhook idempotente (`apply_payment_event`) + admin de orçamento/kill switches (liga/desliga `openai_enabled`/`free_ai_enabled` de verdade).
+2. Onda 3 fatia 3.4: Turnstile + rate limits.
+3. Quando o dono autorizar: aplicar todas as migrations (`0001`–`0005`) no projeto Supabase real, junto com o resto do fluxo de auth já pendente.
 
 ## Documentos de memória atualizados nesta sessão
 
-`docs/DECISIONS.md`, `docs/HANDOFF.md` (este).
+`docs/DATABASE.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md` (este).

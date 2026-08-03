@@ -1,6 +1,8 @@
 # Modelo de dados — PasteScribe
 
-Criado na Onda 0 em 2026-08-03. Este documento define o desenho; o estado real é sempre o das migrations em `supabase/migrations/` (nenhuma existe ainda — a primeira chega na Onda 2). Divergência entre este doc e migration = migration vence + atualizar este doc.
+Criado na Onda 0 em 2026-08-03. Este documento define o desenho; o estado real é sempre o das migrations em `supabase/migrations/`. Divergência entre este doc e migration = migration vence + atualizar este doc.
+
+**Entregue:** identidade/workspaces (Onda 2, `0001`–`0002`) e billing/ledger/orçamento/quota (Onda 3 fatia 3.1, `0003`–`0005`, ver §Funções SQL atômicas). Ainda não entregue: `billing_customers`/`subscriptions`/`payment_events` (fatia 3.3), `abuse_signals`/`abuse_events` (sem lógica de abuso real para escrever neles ainda), tudo de Onda 4+.
 
 Convenções: UUID (`gen_random_uuid()`) como PK, `created_at`/`updated_at` timestamptz, FKs com `on delete` explícito, índices para todo padrão de acesso real, RLS ativa em toda tabela exposta.
 
@@ -20,16 +22,17 @@ Convenções: UUID (`gen_random_uuid()`) como PK, `created_at`/`updated_at` time
 - `subscriptions` — estado espelhado do provider via webhook; nunca fonte primária de verdade de pagamento.
 - `payment_events` — todo webhook recebido, com `provider_event_id` único (idempotência/replay), payload mínimo, status de processamento.
 
-### Créditos, uso e orçamento (Onda 3) — coração financeiro
+### Créditos, uso e orçamento (Onda 3 fatia 3.1 — entregue) — coração financeiro
 
-- `credit_accounts` — 1 por workspace; o saldo é **derivado** do ledger (view/função), não coluna mutável autoritativa.
-- `credit_ledger_entries` — append-only. `kind: purchase|grant|reserve|capture|release|refund|adjust`, quantidade em segundos de mídia (unidade interna canônica: segundos; UI mostra minutos), referência ao job/pagamento, `idempotency_key` única. Correção = lançamento compensatório, nunca update/delete.
-- `usage_ledger_entries` — custo real por operação: modelo, unidades (segundos/tokens), custo estimado, custo real em BRL e USD, origem free|paid, job, workspace. Sem conteúdo.
-- `budget_periods` — orçamento free por período (dia, mês): teto, reservado, realizado. Atualizado apenas por função atômica.
-- `budget_reservations` — reserva por job free: estimativa, estado `reserved|captured|released`, expiração.
-- `free_tier_configs` — política vigente do gratuito (segundos de prévia anônima, segundos verificados, estado Normal/Economy/Restricted/Blocked, limites por identidade), versionada; a copy pública lê daqui.
-- `quota_counters` — contadores duráveis por bucket (usuário, IP, sessão, global, plataforma) com janela; acessados só por função `SECURITY DEFINER` (padrão validado no Ressoa).
-- `abuse_signals` / `abuse_events` — sinais (e-mail descartável, rajada, IP repetido) e ações tomadas (bloqueio, restrição), sem PII além do necessário.
+- `plans` / `prices` — entregues nesta fatia com o catálogo draft (free/creator/pro, mesmos números do `packages/i18n`). `plans.is_purchasable` é o kill switch real: existir no catálogo não significa poder comprar — fica `false` até os preços serem aprovados (`docs/PASTESCRIBE_MONETIZATION.md`).
+- `credit_accounts` — 1 por workspace; `balance_seconds` é um **cache** mantido só por `ledger_append` (nunca por UPDATE direto) — a fonte de verdade é o histórico em `credit_ledger_entries`.
+- `credit_ledger_entries` — append-only. `kind: purchase|grant|reserve|capture|release|refund|adjust`, quantidade em segundos de mídia (unidade interna canônica: segundos; UI mostra minutos), referência ao job/pagamento, `idempotency_key` única. Correção = lançamento compensatório (`kind=adjust`), nunca update/delete.
+- `usage_ledger_entries` — custo real por operação: modelo, segundos processados, custo estimado/real em USD (micros, `bigint`, fiel à fatura real) e em BRL (centavos — moeda de planejamento do orçamento), origem free|paid, referência à reserva e ao workspace. Sem conteúdo. Escrita hoje só por `capture_budget_reservation`; a Onda 4/5 passa a alimentar via `complete_job`.
+- `budget_periods` — orçamento por envelope (`free_ai|ingestion|infra|reserve`, docs/AI_COST_MODEL.md §6) e período: teto, reservado, realizado, todos em centavos de BRL (moeda que o negócio realmente usa pra decidir o teto). Atualizado apenas por função atômica.
+- `budget_reservations` — reserva por identidade (`identity_key` opaco — hash/uuid decidido pela camada chamadora, não pelo banco): estimativa, estado `reserved|captured|released|expired`, expiração.
+- `free_tier_configs` — política vigente do gratuito, só por `max_seconds_total` (segundos — a única unidade realmente aplicada; o "custo máximo" do `docs/AI_COST_MODEL.md` §4 é ilustrativo, não uma segunda trava separada por imprecisão de centavos numa base tão pequena). Seed: `anonymous` (45s), `verified_email` (180s, não renovável), `native_caption` (0s, sem custo de IA). A copy pública lê daqui, nunca hardcoded.
+- `quota_counters` / `quota_consumption_entries` — contador durável por `bucket`+`window_key` opacos (usuário, IP, sessão, global, plataforma — quem/qual janela é decisão de quem chama, o banco só garante atomicidade) mais um log append-only para idempotência/auditoria de cada consumo individual.
+- `abuse_signals` / `abuse_events` — **ainda não entregue** (sem lógica de detecção de abuso real para escrever neles ainda; chega junto com a Onda 4/5 quando existir tráfego real pra detectar).
 
 ### Jobs e mídia (Onda 4)
 
@@ -69,7 +72,7 @@ Princípios:
 1. **Deny by default.** Tabela sem policy = inacessível para `anon`/`authenticated`.
 2. **Membership é a chave.** Quase toda policy deriva de `workspace_members` (função `is_workspace_member(workspace_id, min_role)` STABLE, `SECURITY DEFINER`, `search_path` fixo).
 3. **Papel controla escrita.** viewer lê; editor cria/edita conteúdo; admin gerencia membros; owner gerencia billing e exclusão.
-4. **Tabelas financeiras e de quota são só-servidor.** `credit_ledger_entries`, `usage_ledger_entries`, `budget_*`, `quota_counters`, `payment_events`, `abuse_*`: `revoke all` de anon/authenticated; acesso apenas via funções `SECURITY DEFINER` ou service role. Leitura do próprio ledger pelo usuário passa por view/função filtrada.
+4. **Tabelas financeiras e de quota são só-servidor.** `credit_ledger_entries`, `usage_ledger_entries`, `budget_*`, `quota_*`, `payment_events`, `abuse_*`: `revoke all` de anon/authenticated; acesso apenas via funções `SECURITY DEFINER` ou service role. Leitura do próprio ledger pelo usuário passa por view/função filtrada. `plans`/`prices`/`credit_accounts` também nasceram só-servidor na fatia 3.1 (deny-by-default, regra 1) porque nenhuma UI os lê ainda — a policy de leitura pública de `plans`/`prices` (como `feature_flags`) e a de saldo do próprio workspace em `credit_accounts` entram na mesma PR que ligar o primeiro consumidor real.
 5. **Share por token nunca abre a tabela.** Acesso público de share resolve via função que valida token hash + validade + escopo e retorna somente o conteúdo compartilhado.
 6. **Admin não é RLS bypass no client.** Rotas admin usam service role no servidor após verificação de papel; nenhuma policy "is_admin" para acesso amplo via client.
 7. **Toda migration com RLS nasce com teste** (usuários A/B, papéis, negativas) — CI roda contra Postgres efêmero.
@@ -85,19 +88,27 @@ Princípios:
 | `workspace_role_rank(role)` | ordena a hierarquia viewer<editor<admin<owner para comparação |
 | `is_workspace_member(workspace_id, min_role)` | `SECURITY DEFINER`/`STABLE`, único ponto de verdade sobre pertencimento e papel mínimo — toda policy de workspace* depende dela |
 
-Planejadas para as próximas ondas:
+**Entregues na Onda 3 fatia 3.1** (`supabase/migrations/0003`–`0005`, testadas em `supabase/tests/07`–`10`):
 
 | Função | Responsabilidade | Chamada por |
 |---|---|---|
-| `consume_quota(bucket, window, units, limit)` | contador durável com janela, `FOR UPDATE` | web (server) e worker |
-| `reserve_free_budget_and_enqueue(...)` | validação de orçamento+quota+concorrência, reserva e criação do job numa transação | web (server) |
+| `consume_quota(bucket, window, units, limit, idempotency_key, ...)` | contador durável com janela, `FOR UPDATE`, idempotente | web (server) e worker |
+| `ledger_append(credit_account_id, kind, amount_seconds, idempotency_key, ...)` | lançamento de crédito idempotente; saldo em `credit_accounts` é cache mutado só aqui | web/worker |
+| `reserve_free_budget(envelope, period_start, period_end, identity_key, estimated_cost_cents_brl, idempotency_key, ...)` | reserva atômica contra `budget_periods`, `FOR UPDATE`, idempotente | web (server) |
+| `capture_budget_reservation(reservation_id, actual_cost_cents_brl, ...)` | reconciliação: reserved→consumed pelo custo real, devolve excedente, grava `usage_ledger_entries` | worker (via `complete_job`, Onda 4) |
+| `release_budget_reservation(reservation_id, reason)` | refund integral de reserva não capturada (job falhou/cancelou/expirou), idempotente | worker (via `fail_job`, Onda 4) |
+
+**Planejadas para as próximas ondas** (a Onda 4 monta `transcription_jobs` e passa a chamar as funções acima de dentro de `claim_next_job`/`complete_job`/`fail_job`, em vez de duplicar a lógica de orçamento/quota):
+
+| Função | Responsabilidade | Chamada por |
+|---|---|---|
+| `reserve_free_budget_and_enqueue(...)` | `reserve_free_budget` + criação do job na mesma transação — só existe quando `transcription_jobs` existir | web (server) |
 | `claim_next_job(worker_id, capabilities)` | `FOR UPDATE SKIP LOCKED`, lease, incrementa tentativa | worker |
 | `heartbeat_job(job_id, worker_id)` | renova lease | worker |
-| `complete_job(job_id, ...)` / `fail_job(job_id, ...)` | transição validada + reconciliação da reserva + ledger | worker |
-| `ledger_append(...)` | lançamento com `idempotency_key` única | web/worker |
+| `complete_job(job_id, ...)` / `fail_job(job_id, ...)` | transição validada + chama `capture_budget_reservation`/`release_budget_reservation` + ledger | worker |
 | `apply_payment_event(...)` | idempotência por `provider_event_id`, concede créditos/entitlements | webhook handler |
 
-Todas: `SECURITY DEFINER`, `set search_path = public`, `revoke` de public/anon/authenticated, `grant` só a `service_role` (exceto as que o usuário autenticado chama legitimamente, avaliadas caso a caso).
+Todas: `SECURITY DEFINER`, `set search_path = public`, `revoke` de public/anon/authenticated, `grant` só a `service_role` (exceto as que o usuário autenticado chama legitimamente, avaliadas caso a caso — nenhuma das entregues até agora tem essa exceção).
 
 ## Retenção
 
