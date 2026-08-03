@@ -95,12 +95,26 @@ Cada decisão deve registrar data, status, contexto, decisão, consequências e 
 - **Decisão:** escrever e testar migrations/RLS com **PostgreSQL nativo** (via `apt`, sem Docker) neste sandbox, simulando o contexto de RLS do Supabase (papéis `anon`/`authenticated`/`service_role`, `request.jwt.claims`, `auth.uid()`) em vez de depender do stack completo (Auth/Storage/Realtime) do `supabase start`. A aplicação real do schema no projeto Supabase hospedado do dono (`yeupkcstbewufpptiypp`) acontece via `supabase db push`/SQL Editor, sempre com confirmação explícita antes de tocar no projeto real.
 - **Consequência:** o dono não precisa instalar nada. Se ele tiver Docker na própria máquina no futuro, pode rodar `supabase start` normalmente para desenvolvimento local completo — não é obrigatório.
 
+### 2026-08-03 — `packages/database`: tipos escritos à mão, não gerados via CLI
+
+- **Status:** ativa, revisar quando Docker Hub deixar de estar bloqueado neste ambiente ou quando o dono aplicar as migrations no projeto real
+- **Contexto:** `supabase gen types typescript --db-url ...` também depende de um container Docker internamente (mesmo apontando para um Postgres já acessível via TCP) — testado contra o Postgres nativo local desta sessão e bloqueado pelo mesmo motivo já registrado acima (pull de imagem do Docker Hub negado pela política de rede).
+- **Decisão:** os tipos de `packages/database` são escritos à mão em `src/types.ts`, espelhando exatamente `supabase/migrations/0001_initial_schema.sql` e `0002_workspace_rls.sql` (mesmo formato que o gerador oficial produz: `Database.public.Tables.<tabela>.{Row,Insert,Update}` e `Enums`). Precisos porque as migrations foram escritas nesta mesma sessão.
+- **Consequência:** toda mudança de schema precisa atualizar `packages/database/src/types.ts` manualmente no mesmo PR — sem isso, o tipo diverge do banco real silenciosamente. Quando o dono tiver acesso a Docker (local ou aplicando via CLI linkado ao projeto real), `supabase gen types` pode substituir a manutenção manual.
+
 ### 2026-08-03 — Infra inicial em free tier, sem domínio
 
 - **Status:** ativa
 - **Decisão:** começar em Vercel free (Hobby) e Supabase free; domínio ainda não comprado. Nenhum plano pago é ativado sem decisão do dono.
 - **Consequências:** o site permanece `noindex` e sem DNS próprio; `APP_URL` continua vindo de config (nunca hardcode de domínio); limites do free tier (pausa de projeto Supabase por inatividade, limites de função da Vercel) são aceitos nesta fase; a compra do domínio `pastescribe.com` e o flip de indexação são gatilhos registrados em `docs/SEO.md` e no HANDOFF.
 - **Revisão:** ao preparar o lançamento público (Onda 10+) ou ao esbarrar em limite real do free tier.
+
+### 2026-08-03 — `proxy.ts` em vez de `middleware.ts` (Next.js 16)
+
+- **Status:** ativa
+- **Contexto:** o Next.js 16.2 (versão já usada em `apps/web`) marca `middleware.ts` como depreciado em favor de `proxy.ts` (mesmo runtime, exporta `proxy` em vez de `middleware`) — confirmado pelo próprio warning do `next build` local. A documentação oficial do Supabase para Next.js 16 já usa `proxy.ts` para o refresh de sessão (`supabase.auth.getUser()`), pelo mesmo motivo de sempre: Server Components não têm permissão de escrita em cookies, só o proxy/middleware tem.
+- **Decisão:** `apps/web/proxy.ts` (não `middleware.ts`) faz o refresh de sessão Supabase, seguindo o padrão oficial (retorna o mesmo objeto `response` mutado dentro de `setAll`, nunca um `NextResponse.next()` novo depois).
+- **Consequência:** nenhuma — é a convenção atual da versão do framework já em uso, sem mudança de comportamento.
 
 ## A confirmar (não bloqueiam as Ondas 1–7)
 

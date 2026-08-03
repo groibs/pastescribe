@@ -158,4 +158,29 @@ export const es: Dictionary = {
     honesty:
       "Funciona con videos públicos de fuentes compatibles o archivos que tú subas. Sin contenido privado, sin eludir DRM.",
   },
+  auth: {
+    heading: "Iniciar sesión en PasteScribe",
+    lead: "Usa un enlace mágico, Google o una contraseña — lo que prefieras.",
+    notConfiguredTitle: "El inicio de sesión aún no está conectado",
+    notConfiguredBody:
+      "Este entorno no tiene un proyecto real de Supabase configurado, así que el inicio de sesión está deshabilitado aquí. La página y sus flujos ya están listos para credenciales reales.",
+    emailLabel: "Correo electrónico",
+    emailPlaceholder: "tu@ejemplo.com",
+    magicLinkButton: "Enviar enlace mágico",
+    magicLinkSending: "Enviando…",
+    magicLinkSentTitle: "Revisa tu correo",
+    magicLinkSentBody:
+      "Enviamos un enlace de acceso a {email}. Haz clic en él para continuar — puedes cerrar esta pestaña.",
+    googleButton: "Continuar con Google",
+    dividerOr: "o",
+    passwordToggleShow: "Usar una contraseña",
+    passwordToggleHide: "Usar enlace mágico",
+    passwordLabel: "Contraseña",
+    passwordPlaceholder: "Tu contraseña",
+    passwordButton: "Iniciar sesión",
+    passwordSigningIn: "Iniciando sesión…",
+    errorGeneric: "Algo salió mal. Inténtalo de nuevo.",
+    errorCallback: "Ese enlace de acceso es inválido o expiró. Solicita uno nuevo abajo.",
+    backToHome: "Volver al inicio",
+  },
 };

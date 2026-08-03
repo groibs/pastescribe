@@ -5,6 +5,7 @@ const nextConfig: NextConfig = {
   transpilePackages: [
     "@pastescribe/config",
     "@pastescribe/contracts",
+    "@pastescribe/database",
     "@pastescribe/i18n",
   ],
   async redirects() {
