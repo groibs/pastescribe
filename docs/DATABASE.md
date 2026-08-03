@@ -76,6 +76,17 @@ Princípios:
 
 ## Funções SQL atômicas (contratos)
 
+**Entregues na Onda 2 fatia 2.1** (`supabase/migrations/0001_initial_schema.sql`, `0002_workspace_rls.sql`, testadas em `supabase/tests/`):
+
+| Função/trigger | Responsabilidade |
+|---|---|
+| `handle_new_user()` (trigger `after insert on auth.users`) | cria `profiles` + workspace pessoal atomicamente no signup |
+| `handle_new_workspace()` (trigger `after insert on public.workspaces`) | insere o criador como `owner` em `workspace_members` — vale para o workspace pessoal e para qualquer workspace de time criado depois |
+| `workspace_role_rank(role)` | ordena a hierarquia viewer<editor<admin<owner para comparação |
+| `is_workspace_member(workspace_id, min_role)` | `SECURITY DEFINER`/`STABLE`, único ponto de verdade sobre pertencimento e papel mínimo — toda policy de workspace* depende dela |
+
+Planejadas para as próximas ondas:
+
 | Função | Responsabilidade | Chamada por |
 |---|---|---|
 | `consume_quota(bucket, window, units, limit)` | contador durável com janela, `FOR UPDATE` | web (server) e worker |
