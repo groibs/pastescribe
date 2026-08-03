@@ -8,6 +8,12 @@
 - Branch desta entrega: `claude/pastescribe-wave-0-vqgzet` (recriada a partir do `main` pós-merge, conforme regra de sessão)
 - Estado: fatia 1.2 (`packages/ui`) implementada e verificada; PR aberta aguardando revisão. **Não fazer merge sem autorização.**
 
+## Infraestrutura já criada pelo dono (2026-08-03)
+
+- Projeto Vercel conectado ao repositório (free/Hobby), sem domínio próprio ainda (usa `*.vercel.app`).
+- Projeto Supabase criado (free tier). URL/chaves **não vivem no repositório** — só entram como variável de ambiente na Vercel quando o código da Onda 2 (auth/RLS) realmente precisar delas.
+- **Pendência corrigida nesta sessão:** o primeiro deploy da Vercel falhou (`No Output Directory named "public"`) porque o Root Directory do projeto estava na raiz do monorepo em vez de `apps/web`. Correção é manual no dashboard (Settings → General → Root Directory → `apps/web` → Redeploy) — não há nada de errado no código; nenhum `vercel.json` foi necessário.
+
 ## Decisão de infraestrutura registrada nesta sessão
 
 O dono vai começar em **Vercel free (Hobby)** e **Supabase free**; **domínio ainda não comprado**. Registrado em `docs/DECISIONS.md` (2026-08-03 — Infra inicial em free tier, sem domínio). Consequências já refletidas no código: site permanece `noindex`, nenhuma URL hardcoded de domínio, nenhum serviço pago ativado.
