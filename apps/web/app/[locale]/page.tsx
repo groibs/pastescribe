@@ -60,10 +60,10 @@ export default async function HomePage({ params }: PageProps) {
       <main className="flex flex-col items-center">
         {/* Hero */}
         <section className="hero-pattern flex w-full flex-col items-center border-b border-outline-variant px-4 pb-16 pt-24 text-center sm:px-12">
-          <h1 className="mb-4 max-w-2xl text-4xl font-bold leading-tight tracking-tight text-on-background sm:text-5xl">
+          <h1 className="mb-4 max-w-2xl text-balance text-4xl font-bold leading-tight tracking-tight text-on-background sm:text-5xl">
             {dict.home.heroTagline}
           </h1>
-          <p className="mb-8 max-w-xl text-lg leading-7 text-on-surface-variant">
+          <p className="mb-8 max-w-xl text-pretty text-lg leading-7 text-on-surface-variant">
             {dict.home.heroLead}
           </p>
 

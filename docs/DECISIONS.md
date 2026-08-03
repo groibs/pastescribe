@@ -130,6 +130,13 @@ Cada decisão deve registrar data, status, contexto, decisão, consequências e 
 - **Decisão:** trocar `text-outline` por `text-on-surface-variant` (já comprovadamente compatível, usado em outros lugares do mesmo header) nesses pontos, e remover o `opacity-60` das linhas de transcrição do demo em vez de tentar calibrar uma opacidade "seguramente" acima do limiar.
 - **Consequência:** `text-outline` continua existindo como token (bom para ícones decorativos `aria-hidden` e estados `disabled` — isentos da regra de contraste do WCAG), mas não deve ser usado como cor de texto legível não-decorativo daqui pra frente. Verificado ao vivo: 0 violações em 8 combinações de página/locale após a correção.
 
+### 2026-08-03 — Merge automático de PRs autorizado pelo dono a partir desta sessão
+
+- **Status:** ativa
+- **Contexto:** até aqui, cada PR desta sessão esperou um "merge e continua" explícito do dono a cada vez (PRs #2–#7). O dono pediu diretamente no chat: "quando enviar o PR, daqui pra frente, pode ir criando o PR e automaticamente, dando merge e já começa o próximo."
+- **Decisão:** a partir desta sessão, PRs abertas pelo Claude Code neste repositório são mergeadas automaticamente assim que os checks de CI (`checks`, `db-migrations-rls`, deploy da Vercel) estiverem verdes, sem esperar uma nova confirmação a cada PR. Continua exigindo pausa e pergunta explícita ao dono: qualquer coisa que toque o projeto Supabase real (aplicar migrations, mudar config de produção), CI vermelho, ou mudança arquiteturalmente significativa/ambígua.
+- **Consequência:** o dono revisa o histórico de PRs/commits depois do fato, em vez de aprovar cada um antes do merge. Reversível a qualquer momento — basta o dono pedir para voltar ao fluxo anterior.
+
 ## A confirmar (não bloqueiam as Ondas 1–7)
 
 - estratégia autorizada de obtenção de legenda/áudio **por plataforma** (pesquisa técnica/jurídica da Onda 8; até lá, upload é o caminho universal);
