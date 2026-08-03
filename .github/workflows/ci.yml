@@ -37,3 +37,19 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  db-migrations-rls:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL and pgTAP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql postgresql-16-pgtap libtap-parser-sourcehandler-pgtap-perl
+          sudo service postgresql start
+          sudo -u postgres psql -c "ALTER USER postgres PASSWORD 'postgres';"
+
+      - name: Run migrations and RLS tests (pgTAP)
+        run: bash scripts/test-db-local.sh
