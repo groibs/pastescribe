@@ -63,6 +63,7 @@ Convenções: UUID (`gen_random_uuid()`) como PK, `created_at`/`updated_at` time
 - `webhook_endpoints` / `webhook_deliveries` (Onda 11) — assinatura por segredo, retries com backoff, status.
 - `analytics_events` — catálogo fechado, pseudonimizado, com retenção curta (ver `docs/ANALYTICS_EVENTS.md`).
 - `audit_logs` — ações administrativas e sensíveis: ator, ação, alvo, timestamp, sem payload de conteúdo.
+- `platform_admins` — **entregue na Onda 3 fatia 3.3**: allowlist global (`user_id` → `auth.users`), não confundir com `workspace_members.role` (que é por workspace). É a base do `/admin` — "papel em banco" verificado só no servidor com `service_role`, nunca RLS no client (regra 6 abaixo). Sem seed: o primeiro admin é inserido manualmente (`docs/HANDOFF.md` tem o comando).
 - `integrations` (Onda 11), `seo_pages`/`seo_localizations` (Onda 10, se houver CMS), `support_cases` (opcional).
 
 ## Estratégia de RLS

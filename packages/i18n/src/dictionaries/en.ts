@@ -127,6 +127,31 @@ export type Dictionary = {
     inDevelopmentTitle: string;
     inDevelopmentBody: string;
   };
+  admin: {
+    heading: string;
+    killSwitchesHeading: string;
+    killSwitchesLead: string;
+    enableButton: string;
+    disableButton: string;
+    budgetHeading: string;
+    budgetLead: string;
+    budgetEnvelopeLabel: string;
+    budgetPeriodStartLabel: string;
+    budgetPeriodEndLabel: string;
+    budgetCapLabel: string;
+    createBudgetButton: string;
+    noBudgetPeriods: string;
+    tableEnvelope: string;
+    tablePeriod: string;
+    tableCap: string;
+    tableReserved: string;
+    tableConsumed: string;
+    tableStatus: string;
+    envelopeFreeAi: string;
+    envelopeIngestion: string;
+    envelopeInfra: string;
+    envelopeReserve: string;
+  };
 };
 
 export const en: Dictionary = {
@@ -320,5 +345,30 @@ export const en: Dictionary = {
     inDevelopmentTitle: "The product itself is still in development",
     inDevelopmentBody:
       "Your account works — this confirms sign-in, your session, and your workspace are wired up correctly. Transcription and the rest of the product come in upcoming updates.",
+  },
+  admin: {
+    heading: "Admin",
+    killSwitchesHeading: "Kill switches",
+    killSwitchesLead: "Global switches — cut AI calls immediately if something goes wrong.",
+    enableButton: "Enable",
+    disableButton: "Disable",
+    budgetHeading: "Budget periods",
+    budgetLead: "Without a configured period, the free tier stays fail-closed by design — this is what unblocks it.",
+    budgetEnvelopeLabel: "Envelope",
+    budgetPeriodStartLabel: "Start date",
+    budgetPeriodEndLabel: "End date",
+    budgetCapLabel: "Cap (BRL)",
+    createBudgetButton: "Create period",
+    noBudgetPeriods: "No budget period configured yet.",
+    tableEnvelope: "Envelope",
+    tablePeriod: "Period",
+    tableCap: "Cap",
+    tableReserved: "Reserved",
+    tableConsumed: "Consumed",
+    tableStatus: "Status",
+    envelopeFreeAi: "Free AI",
+    envelopeIngestion: "Ingestion/processing",
+    envelopeInfra: "Infrastructure",
+    envelopeReserve: "Reserve",
   },
 };
