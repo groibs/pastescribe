@@ -9,7 +9,9 @@
  */
 @theme {
   --color-surface: #faf8ff;
+  --color-surface-bright: #faf8ff;
   --color-surface-dim: #d5d9f0;
+  --color-surface-variant: #dee1f9;
   --color-surface-container-lowest: #ffffff;
   --color-surface-container-low: #f3f3ff;
   --color-surface-container: #ebedff;
@@ -17,6 +19,10 @@
   --color-surface-container-highest: #dee1f9;
   --color-on-surface: #161b2b;
   --color-on-surface-variant: #444656;
+  --color-on-secondary-fixed-variant: #424751;
+  --color-on-background: #161b2b;
+  --color-inverse-surface: #2b3041;
+  --color-inverse-on-surface: #eff0ff;
   --color-outline: #747687;
   --color-outline-variant: #c4c5d8;
   --color-primary: #003adb;
@@ -39,8 +45,11 @@
   --color-warning-container: #ffefd3;
   --color-on-warning-container: #6b4100;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", monospace;
+  /* Carregadas por next/font em [locale]/layout.tsx (self-hosted, sem
+     request ao Google em runtime); fallback caso a variável não exista
+     (ex.: fora do App Router). */
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, monospace;
 
   /* Raio (docs/DESIGN_SYSTEM.md): botões/inputs 8px → rounded-md;
      cards grandes/players 16px → rounded-xl. O Tailwind v4 não tem o
@@ -62,4 +71,23 @@ body {
   background-color: var(--color-surface);
   color: var(--color-on-surface);
   font-family: var(--font-sans);
+}
+
+/* Padrão de fundo do hero — fiel ao Stitch (stitch-reference). Pontos
+   discretos, nunca gradiente decorativo pesado (docs/DESIGN_SYSTEM.md
+   §Anti-padrões). */
+.hero-pattern {
+  background-image: radial-gradient(#dee2ef 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

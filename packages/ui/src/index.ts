@@ -16,4 +16,9 @@ export type { AlertProps, AlertVariant } from "./Alert";
 export { Skeleton } from "./Skeleton";
 export type { SkeletonProps } from "./Skeleton";
 
+export { TranscribeBar } from "./TranscribeBar";
+export type { TranscribeBarProps } from "./TranscribeBar";
+
+export { Logomark } from "./Logomark";
+
 export { cx } from "./cx";

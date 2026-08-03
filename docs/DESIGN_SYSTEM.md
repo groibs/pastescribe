@@ -56,7 +56,9 @@ Raio no código usa a nomenclatura padrão do Tailwind v4 (`rounded-md`=8px para
 
 ## Componentes (inventário e onda de chegada)
 
-Onda 1 (fatia 1.2, entregue): tokens em `apps/web/app/globals.css`; `packages/ui` com Button, Input, UrlInput, Badge, Alert, Skeleton — cada um com testes de estado (default/disabled/loading/erro conforme aplicável) e verificação automática via axe-core (zero violações, `color-contrast` desligado em teste unitário porque jsdom não computa layout real; contraste dos tokens verificado à parte, tabela acima). Integrados de verdade na home (`apps/web/app/[locale]/page.tsx`): Badge de status, Alert informativo, UrlInput+Button desabilitados com hint explicando o motivo (nunca um placeholder que finge funcionar).
+Onda 1 (fatia 1.2, entregue): tokens em `apps/web/app/globals.css`; `packages/ui` com Button, Input, UrlInput, Badge, Alert, Skeleton — cada um com testes de estado (default/disabled/loading/erro conforme aplicável) e verificação automática via axe-core (zero violações, `color-contrast` desligado em teste unitário porque jsdom não computa layout real; contraste dos tokens verificado à parte, tabela acima).
+
+Onda 1 (fatia 1.4, entregue): `TranscribeBar` (ícone + input + botão de ação em pílula) adicionado ao `packages/ui`. Home e pricing reconstruídas com fidelidade real ao Stitch (`apps/web/app/[locale]/page.tsx`, `.../pricing/page.tsx`).
 Onda 2–4: Dialog, Tabs, Toast, Dropzone, ProgressSteps, JobStatusChip, EmptyState, ErrorState, Table.
 Onda 6: Player, TranscriptSegment, SpeakerControl, SelectionToolbar, ExportPanel.
 Onda 9–10: PricingCard, CreditMeter, PlanBadge, Charts (admin).
@@ -80,6 +82,14 @@ Contraste AA em todo par usado; foco visível; navegação por teclado completa 
 
 Gradiente roxo genérico; glow decorativo; grade de cards idênticos; número gigante sem função; seções 01/02/03 decorativas; ícones aleatórios; sombra uniforme em tudo; hero sem produto real; mockup flutuante; copy vaga ("revolucione seu workflow"); centralização de tudo; spacing robótico sem ritmo.
 
-## Lacuna registrada
+## Material completo recebido (2026-08-03)
 
-Os screenshots do Stitch (home, dashboard, editor, pricing, logo) foram perdidos na truncagem do ZIP exportado (ver `docs/STITCH_REFERENCE.md`). A reconstrução de telas usará: tokens acima + descrições do prompt-mestre + fragmento recuperado do dashboard. Se o dono tiver o export original íntegro, recomitar o ZIP melhora a fidelidade — **não bloqueia** as Ondas 0–5 (fundação e backend).
+O export original íntegro do Stitch foi recebido e substituiu o ZIP truncado da Onda 0 (`docs/STITCH_REFERENCE.md`). Home e pricing foram reconstruídos com fidelidade real ao HTML/screenshot; dashboard e editor aguardam suas ondas (2.3/6) para terem dado real, mas o material visual já está salvo.
+
+Decisões de implementação tomadas ao reconstruir (aplicam-se a toda tela nova a partir daqui):
+
+- **Fontes reais:** Inter e JetBrains Mono via `next/font/google` (self-hosted pelo Next.js, sem request externo em runtime) — o export do Stitch usa `<link>` direto ao Google Fonts, que não deve ser copiado (`docs/STITCH_REFERENCE.md` §O que não fazer).
+- **Ícones:** `lucide-react` (MIT, SVG, tree-shakeable) no lugar dos Material Symbols do Stitch (fonte de ícone via Google Fonts) — evita dependência de fonte externa e os problemas de acessibilidade de ícones-por-ligadura. Mapeamento por significado, não por nome 1:1.
+- **Imagens/fotos de estoque do export** (ex.: still de vídeo do hero) não são copiadas — são URLs do Google AI Studio, fora do nosso controle. Substituídas por composições com tokens (gradiente/placeholder) que preservam o layout sem a dependência externa.
+- **Logomark:** recriado como SVG inline (documentos sobrepostos, conforme `docs/PASTESCRIBE_BRIEFING.md`), não a imagem hotlinked do export.
+- **`TranscribeBar`** (novo em `packages/ui`): pílula ícone + input (label acessível, visualmente oculta quando o contexto já deixa claro) + botão de ação — usada no hero da home e reaproveitada no "Start Transcribing" do dashboard (Onda 2.3).

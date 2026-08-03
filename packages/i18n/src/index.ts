@@ -27,6 +27,13 @@ export const LOCALE_BCP47: Record<Locale, string> = {
   es: "es",
 };
 
+/** Sigla curta para seletores compactos de idioma (nunca derivar do label). */
+export const LOCALE_SHORT_CODES: Record<Locale, string> = {
+  en: "EN",
+  "pt-br": "PT",
+  es: "ES",
+};
+
 const DICTIONARIES: Record<Locale, Dictionary> = {
   en,
   "pt-br": ptBr,

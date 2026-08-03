@@ -16,45 +16,36 @@ O pacote original continha:
 
 Foi reorganizado em `stitch-reference/` com nomes consistentes.
 
-## ⚠️ Estado real do arquivo (auditoria da Onda 0, 2026-08-03)
+## Histórico: ZIP truncado na Onda 0, substituído em 2026-08-03
 
-O ZIP versionado está **truncado** (15 KB, sem end-of-central-directory; `unzip` falha). Recuperação por parsing manual dos local headers obteve:
+O ZIP versionado originalmente na Onda 0 estava truncado (15 KB, sem end-of-central-directory). Tokens e os dois docs de design foram recuperados por parsing manual; os 4 HTMLs completos e os 5 screenshots estavam ausentes — registrado então em `docs/RESEARCH_REPORT.md` e `LESSONS_LEARNED.md`.
 
-- `design/PASTESCRIBE_DESIGN.md` — **íntegro** (idêntico em conteúdo à cópia já versionada em `stitch-reference/design/`, com prose um pouco mais completa);
-- `design/LUMINA_LEXICON.md` — **íntegro** (variante de design com JetBrains Mono para timestamps; recuperado apenas via extração);
-- `html/dashboard.html` — **parcial** (~5,4 KB de 25,5 KB; confirma os tokens no Tailwind config);
-- `html/home.html`, `html/editor.html`, `html/pricing.html` e os 5 screenshots `.webp` — **ausentes do arquivo** (perdidos na truncagem).
-
-Consequências: os tokens e a direção visual estão seguros e consolidados em `docs/DESIGN_SYSTEM.md`; a comparação pixel-a-pixel com screenshots não é possível. Se o export original íntegro ainda existir, recomitá-lo melhora a fidelidade das Ondas 6/10 — não bloqueia as ondas de fundação. O script `scripts/extract-stitch-reference.sh` continua falhando com o ZIP atual por design (`unzip` estrito); a recuperação parcial foi feita manualmente.
+**Resolvido:** o dono enviou o export original íntegro (1,9 MB, `unzip -t` sem erros), que substituiu o arquivo truncado em `stitch-reference/pastescribe-stitch-export.zip`. Material completo confirmado: logo, home, dashboard, editor e pricing, cada um com `code.html` + `screen.png`, mais os dois `DESIGN.md`. `docs/DESIGN_SYSTEM.md` e a home/pricing do produto foram atualizados com fidelidade total a partir daqui.
 
 ## Estrutura
 
-O material limpo está preservado em:
+O material compactado está preservado em:
 
 ```text
 stitch-reference/
 ├── README.md
-└── pastescribe-stitch-export.zip
-```
-
-Após executar `bash scripts/extract-stitch-reference.sh`, será criado:
-
-```text
-stitch-reference/extracted/
 ├── design/
 │   ├── PASTESCRIBE_DESIGN.md
 │   └── LUMINA_LEXICON.md
-├── html/
-│   ├── home.html
-│   ├── dashboard.html
-│   ├── editor.html
-│   └── pricing.html
-└── screens/
-    ├── logo.webp
-    ├── home.webp
-    ├── dashboard.webp
-    ├── editor.webp
-    └── pricing.webp
+└── pastescribe-stitch-export.zip
+```
+
+Após executar `bash scripts/extract-stitch-reference.sh`, será criado (estrutura real do export, não versionada):
+
+```text
+stitch-reference/extracted/stitch_universal_video_transcriber/
+├── pastescribe/DESIGN.md
+├── lumina_lexicon/DESIGN.md
+├── pastescribe_logo/screen.png
+├── pastescribe_home/{code.html, screen.png}
+├── pastescribe_dashboard/{code.html, screen.png}
+├── pastescribe_editor/{code.html, screen.png}
+└── pastescribe_pricing/{code.html, screen.png}
 ```
 
 A pasta `extracted/` é gerada localmente e não precisa ser versionada.

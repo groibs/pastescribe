@@ -18,9 +18,9 @@ Aprendizado: o `pastescribe-stitch-export.zip` versionado no bootstrap estava tr
 
 Aplicação prática: todo artefato binário recebido (zip de design, fixture de mídia, dump) deve ser validado na chegada (`unzip -t`, checksum) antes do commit; scripts de extração devem falhar alto. O mesmo princípio vale para uploads de usuários no produto: nunca confiar que um container está íntegro/é o que diz ser — validar de verdade (já refletido em `docs/THREAT_MODEL.md` T3).
 
-Onde consultar: `docs/RESEARCH_REPORT.md` §4, `docs/DESIGN_SYSTEM.md` (lacuna registrada).
+Onde consultar: `docs/RESEARCH_REPORT.md` §4, `docs/DESIGN_SYSTEM.md`.
 
-Status: ativo
+Status: **resolvido em 2026-08-03** — o dono enviou o export original íntegro, substituído no repositório. A lição sobre validar binários na chegada continua ativa como prática permanente.
 
 ## 2026-08-03 — Governança madura já existe nos repos do dono; adaptar, não reinventar
 
