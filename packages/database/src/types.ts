@@ -579,6 +579,24 @@ export type Database = {
           },
         ];
       };
+      platform_admins: {
+        Row: {
+          user_id: string;
+          granted_by: string | null;
+          granted_at: string;
+        };
+        Insert: {
+          user_id: string;
+          granted_by?: string | null;
+          granted_at?: string;
+        };
+        Update: {
+          user_id?: string;
+          granted_by?: string | null;
+          granted_at?: string;
+        };
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
