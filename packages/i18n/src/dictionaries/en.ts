@@ -37,6 +37,7 @@ export type Dictionary = {
     resources: string;
     signIn: string;
     getStarted: string;
+    signOut: string;
     comingSoon: string;
     languageLabel: string;
   };
@@ -119,6 +120,13 @@ export type Dictionary = {
     errorCallback: string;
     backToHome: string;
   };
+  app: {
+    heading: string;
+    workspaceLabel: string;
+    workspaceFallback: string;
+    inDevelopmentTitle: string;
+    inDevelopmentBody: string;
+  };
 };
 
 export const en: Dictionary = {
@@ -134,6 +142,7 @@ export const en: Dictionary = {
     resources: "Resources",
     signIn: "Sign In",
     getStarted: "Get Started Free",
+    signOut: "Sign out",
     comingSoon: "Coming soon",
     languageLabel: "Language",
   },
@@ -303,5 +312,13 @@ export const en: Dictionary = {
     errorGeneric: "Something went wrong. Please try again.",
     errorCallback: "That sign-in link is invalid or expired. Request a new one below.",
     backToHome: "Back to home",
+  },
+  app: {
+    heading: "Welcome back",
+    workspaceLabel: "Workspace",
+    workspaceFallback: "No workspace found yet — this shows up once the database migrations are applied.",
+    inDevelopmentTitle: "The product itself is still in development",
+    inDevelopmentBody:
+      "Your account works — this confirms sign-in, your session, and your workspace are wired up correctly. Transcription and the rest of the product come in upcoming updates.",
   },
 };

@@ -1,68 +1,63 @@
 # HANDOFF — PasteScribe
 
-Última atualização: **2026-08-03** (Onda 0 + fatias 1.1/1.2 + Onda 2 fatias 2.1/2.2 mergeadas; reconstrução do site fiel ao Stitch mergeada; auth Supabase SSR em revisão)
+Última atualização: **2026-08-03** (Onda 0 + fatias 1.1/1.2 + Onda 2 fatias 2.1/2.2 mergeadas; fatia 2.3 em revisão)
 
 ## Branch e base
 
-- Base: `main` (PRs #2, #3, #4, #5 já mergeadas a pedido do dono)
+- Base: `main` (PRs #2, #3, #4, #5, #6 já mergeadas a pedido do dono)
 - Branch desta entrega: `claude/pastescribe-wave-0-vqgzet`
-- Estado: fatia 2.2 (auth Supabase SSR: `packages/database`, clients browser/server/proxy, página `/login`) completa; PR aberta aguardando revisão. **Não fazer merge sem autorização.**
+- Estado: fatia 2.3 (estado autenticado no header + `/{locale}/app` mínimo) completa; PR aberta aguardando revisão. **Não fazer merge sem autorização.**
 
 ## Infraestrutura (inalterado desde a última entrega)
 
-Vercel (free) + projeto Supabase (free) já criados pelo dono; deploy da Vercel corrigido (Root Directory = `apps/web`); domínio ainda não comprado; `docs/DECISIONS.md` tem os detalhes completos. **Nenhuma migration foi aplicada no projeto Supabase real do dono nesta entrega** — ver seção própria abaixo.
+Vercel (free) + projeto Supabase (free) já criados pelo dono; deploy da Vercel corrigido (Root Directory = `apps/web`); domínio ainda não comprado; `docs/DECISIONS.md` tem os detalhes completos. **Nenhuma migration foi aplicada no projeto Supabase real do dono** — segue pendente, ver seção própria abaixo.
 
-## O que esta entrega contém: fatia 2.2 — Supabase Auth SSR (`@supabase/ssr`)
+## O que esta entrega contém: fatia 2.3 — estado autenticado + `/app` mínimo
 
-- **`packages/database`** (novo pacote): tipos `Database` escritos à mão em `src/types.ts`, espelhando exatamente `supabase/migrations/0001_initial_schema.sql` e `0002_workspace_rls.sql` (mesmo formato que `supabase gen types typescript` produziria). Não foram gerados via CLI porque o gerador depende de Docker, e o pull de imagens do Docker Hub é bloqueado neste sandbox (mesmo bloqueio já registrado na fatia 2.1) — decisão e consequência (sincronizar manualmente a cada mudança de schema) documentadas em `docs/DECISIONS.md`.
-- **Clients Supabase** (`apps/web/lib/supabase/`): `config.ts` (lê `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`, retorna `null` se ausentes — nunca lança nem finge), `client.ts` (browser, `createBrowserClient`), `server.ts` (Server Components/Route Handlers, `createServerClient` com `next/headers`). Renomeei `SUPABASE_URL`/`SUPABASE_ANON_KEY` (fatia 1.1) para `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` em `packages/config/src/env.ts` e `.env.example` — URL e anon key não são segredo (protegidos por RLS) e precisam do prefixo `NEXT_PUBLIC_` para chegar ao bundle do browser; `SUPABASE_SERVICE_ROLE_KEY` continua sem esse prefixo, só servidor/worker.
-- **`apps/web/proxy.ts`** (não `middleware.ts`): refresh de sessão via `supabase.auth.getUser()`, padrão oficial do Supabase para Next.js 16 — o Next.js 16.2 já usado neste repo depreciou `middleware.ts` em favor de `proxy.ts` (confirmado pelo warning do próprio `next build`; pesquisa confirmou que a documentação do Supabase para Next 16 já usa `proxy.ts` para exatamente este propósito). Decisão registrada em `docs/DECISIONS.md`.
-- **`/{locale}/login`** (`apps/web/app/[locale]/login/`): página real de login — link mágico (`signInWithOtp`), Google (`signInWithOAuth`) e senha opcional (`signInWithPassword`, atrás de um toggle "usar uma senha"). Sem env vars configuradas, mostra um `Alert` explicando que o ambiente não está conectado e desabilita todos os campos/botões — nunca finge uma sessão nem falha em silêncio. Textos novos em `packages/i18n` (`Dictionary.auth`, 3 locales).
-- **`apps/web/app/auth/callback/route.ts`**: troca `code` por sessão (`exchangeCodeForSession`). `next` só é aceito se for caminho relativo (`/…`) — nunca URL absoluta, para não virar open redirect; em erro, volta para `/{locale}/login?error=auth_callback_failed` com o locale detectado a partir do próprio `next`.
-- Header/footer **não foram alterados**: "Sign In"/"Get Started Free" continuam inertes de propósito — logar com sucesso hoje deixaria o usuário numa home que ainda mostra "Sign In" (não existe estado autenticado no header nem dashboard ainda). Ligar isso é fatia 2.3, junto com o dashboard mínimo. `/login` funciona e é testável diretamente pela URL.
+- **`AuthHeaderStatus`** (`apps/web/app/_components/AuthHeaderStatus.tsx`, novo client component): o `SiteHeader` mostra "Sign In"/"Get Started Free" (agora links reais para `/{locale}/login`) quando deslogado, ou um badge com a inicial do e-mail + botão "Sign out" quando logado. **Decisão importante:** esse estado é lido no **client** (`supabase.auth.getUser()`/`onAuthStateChange`), não no server component do header — ler cookies no server forçaria `/{locale}` e `/{locale}/pricing` a saírem de SSG. Custo aceito: um instante de estado vazio antes do primeiro efeito rodar (sem layout shift — placeholder do mesmo tamanho). Decisão completa em `docs/DECISIONS.md`.
+- **`apps/web/app/actions/auth.ts`** (`signOutAction`, Server Action): chama `supabase.auth.signOut()` e redireciona para `/{locale}` — usado tanto pelo header quanto pela página `/app`, sempre via `<form action={signOutAction}>`.
+- **`/{locale}/app`** (`apps/web/app/[locale]/app/page.tsx`): área autenticada mínima e **real**, sem dado fake do mockup do Stitch (a funcionalidade de transcrição não existe ainda). Sem sessão → redireciona para `/{locale}/login`. Com sessão → mostra e-mail, busca o workspace pessoal do usuário com uma query real sob RLS (`workspaces` filtrado por `created_by`/`is_personal`, protegido pela policy `workspaces_select_member`) e um aviso honesto de que o produto em si segue em desenvolvimento. Página inerentemente dinâmica (não SSG) — não tem o problema de cookies do header, porque já não podia ser estática de qualquer forma.
+- **`/admin` NÃO entrou nesta fatia** — decisão deliberada, não esquecimento. `docs/ARCHITECTURE.md`/master-prompt só especificam "painel admin lê agregados, nunca conteúdo" e "protegido por papel e validação server-side"; não há ainda nenhum agregado real para mostrar (sem jobs, sem ledger, sem billing — chegam nas Ondas 3+). Construir uma "base" agora seria placeholder vazio ou dado inventado. Fica para quando houver algo real de admin para agregar.
+- **Achado de acessibilidade real, corrigido nesta sessão** (não introduzido por ela — pré-existia, apareceu ao rodar axe-core ao vivo contra o header que eu estava editando): `text-outline` usado como cor de texto (spans inertes "API"/"Resources", links do seletor de idioma para locale não-ativo, timestamp da seção de demo da home) tinha contraste real de ~4.26:1 contra `bg-surface` — abaixo do mínimo de 4.5:1. Também a seção de demo da home usava `opacity-60` nas linhas de transcrição além da primeira, o que reduz o contraste de qualquer cor por baixo do limiar. Corrigido: `text-outline` → `text-on-surface-variant` (token já comprovadamente compatível) nesses pontos; `opacity-60` removido (todas as linhas do demo renderizam na mesma cor/contraste agora). Detalhes em `docs/DECISIONS.md`.
 
-## Entrega anterior: reconstrução fiel ao Google Stitch (mergeada)
+## Entregas anteriores (mergeadas)
 
-O dono enviou o export original **íntegro** do Stitch (1,9 MB — o ZIP da Onda 0 estava truncado). Substituído em `stitch-reference/pastescribe-stitch-export.zip`. Material completo: logo, home, dashboard, editor, pricing (cada um com `code.html` + `screen.png`) + 2 docs de design. Detalhes em `docs/STITCH_REFERENCE.md` e `docs/RESEARCH_REPORT.md`.
+- **Fatia 2.2** — Supabase Auth SSR: `packages/database` (tipos handwritten), clients browser/server/`proxy.ts`, página `/{locale}/login` (magic link, Google, senha opcional), `/auth/callback`. `SUPABASE_URL`/`ANON_KEY` renomeados para `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+- **Fatia 1.4** — reconstrução fiel ao Google Stitch: home, pricing, `SiteHeader`/`SiteFooter`, `TranscribeBar`, `Logomark`, fontes self-hosted, tokens de cor.
 
-**Reconstruído com fidelidade real (não copiado — reescrito com `packages/ui`, Tailwind, tokens):**
+Detalhes completos de ambas em commits/PRs anteriores (`git log`) e em `docs/DECISIONS.md`.
 
-- **Home** (`apps/web/app/[locale]/page.tsx`): header, hero com `TranscribeBar` (novo componente) + plataformas suportadas, seção "Instant clarity" (demo estático não-interativo), grid de features (bento 2+1+1+2), footer. Idêntico em estrutura ao Stitch nos 3 locales.
-- **Pricing** (`apps/web/app/[locale]/pricing/`): heading, aviso de **draft** (preços ilustrativos, `docs/PASTESCRIBE_MONETIZATION.md`), toggle Monthly/Yearly **funcional** (`PricingToggle.tsx`, client component, sem chamada de rede), 3 cards de plano, banner de créditos, FAQ com `<details>/<summary>` nativos (acessível sem JS), aviso pay-as-you-go.
-- **`SiteHeader`/`SiteFooter`** (`apps/web/app/_components/`): compartilhados entre as duas páginas. Nav para páginas que ainda não existem (API, Resources, Sign In, Get Started) aparece **visualmente idêntica ao Stitch mas inerte** (não é link nem botão clicável) — nunca uma promessa que o produto ainda não cumpre. Seletor de idioma (EN/PT/ES) adicionado — não existe no Stitch, mas é requisito do produto (`docs/SEO.md`).
-- **`packages/ui`:** `TranscribeBar` (pílula ícone+input+botão, label ocultável) e `Logomark` (SVG inline dos documentos sobrepostos — não a imagem hotlinked do export), ambos testados com axe.
-- **Fontes e ícones:** Inter + JetBrains Mono via `next/font/google` (self-hosted, sem request ao Google em runtime); `lucide-react` no lugar dos Material Symbols do export (evita fonte de ícone externa). Foto de estoque do hero substituída por placeholder com tokens (não hotlinkamos o CDN do Google AI Studio).
-- **Tokens novos:** `inverse-surface`, `on-background`, `surface-bright`, `surface-variant`, `on-secondary-fixed-variant` — faltavam e causaram um bug real (mockup de vídeo sem fundo escuro) pego na verificação visual, corrigido.
+## Verificação real feita nesta sessão (fatia 2.3 — não só "deveria funcionar")
 
-## Verificação real feita nesta sessão (fatia 2.2 — não só "deveria funcionar")
-
-- `pnpm install && pnpm lint && pnpm typecheck && pnpm test && pnpm build` no monorepo inteiro: todos verdes. **61 testes** (mesmo total de antes — os testes genéricos de `packages/i18n` iteram todas as chaves de todos os locales, então já cobrem o novo `Dictionary.auth` sem precisar de casos novos: paridade de chaves entre locales e ausência de string vazia continuam passando com a seção nova). Rotas SSG agora incluem `/en/login`, `/pt-br/login`, `/es/login` além das já existentes; `/auth/callback` compila como rota dinâmica. `packages/database` não tem script de teste (só tipos) — `turbo run test` o ignora normalmente.
-- **Servidor real (`next start`) + Playwright + axe-core** contra `/en/login` e `/pt-br/login`: screenshots capturados, **0 violações de a11y** (incluindo `color-contrast`, que só é confiável em browser real — não em jsdom). Mobile (375px) verificado visualmente: sem scroll horizontal, cartão de login se adapta.
-- O estado real e verificável neste ambiente é o de **"não configurado"**: sem `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY`, `getSupabaseBrowserClient()` retorna `null`, a página mostra o aviso "Sign-in isn't connected yet" e desabilita todos os campos — comportamento confirmado ao vivo, não só por leitura de código.
-- **O que NÃO foi testado (e não pode ser, sem credenciais reais)**: o fluxo completo de `signInWithOtp`/`signInWithOAuth`/`signInWithPassword` contra um projeto Supabase real, a troca de código em `/auth/callback`, e o refresh de sessão em `proxy.ts`. O código segue exatamente a API oficial do `@supabase/ssr` (`getAll`/`setAll`, `exchangeCodeForSession`), mas isso é diferente de ter sido exercitado contra o GoTrue real. Ver "Próximo passo exato".
+- `pnpm install && pnpm lint && pnpm typecheck && pnpm test && pnpm build` no monorepo inteiro: todos verdes, **61 testes**. Rotas agora incluem `/en/app`, `/pt-br/app`, `/es/app` (SSG neste ambiente sem credenciais — ver nota abaixo).
+- **Servidor real (`next start`) + Playwright**: confirmei ao vivo que `curl /en/app` sem sessão devolve `307` para `/en/login` (não é suposição de código — testado). Screenshot da home completa após as correções de contraste, revisado visualmente: header mostra "Sign In"/"Get Started Free" reais, linhas de demo consistentes (sem mais o washed-out da `opacity-60`).
+- **axe-core ao vivo contra 8 combinações de página/locale** (`/en`, `/pt-br`, `/es`, `/en/pricing`, `/pt-br/pricing`, `/en/login`, `/pt-br/login`, `/en/app`): **0 violações** após corrigir o achado de contraste descrito acima (antes da correção: 12 nós violando `color-contrast` só na home, mais 4 no header da pricing).
+- **Nota técnica sobre `/en/app` ser SSG neste build**: como este sandbox não tem `NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` configuradas, `getSupabaseConfig()` retorna `null` em build-time e `cookies()` nunca é alcançado — o Next.js consegue provar que a página sempre redireciona para `/login` e pré-renderiza esse redirect como estático. **Num deploy real com credenciais configuradas, essa mesma página se torna dinâmica automaticamente** (o build não consegue mais provar que o branch de `cookies()` é morto) — comportamento correto e esperado, documentado em `docs/DECISIONS.md`, não testável de ponta a ponta aqui.
+- **O que NÃO foi testado (sem credenciais reais neste sandbox)**: login real seguido de visita a `/app` com sessão de verdade, a query RLS contra o workspace pessoal com um usuário real, e o botão "Sign out"/`AuthHeaderStatus` no estado logado. O código segue a API oficial do `@supabase/ssr`/`supabase-js` e a RLS já testada localmente com pgTAP (fatia 2.1), mas isso é diferente de ter sido exercitado contra o GoTrue/Postgres reais do projeto do dono.
 
 ## Como testar
 
 ```bash
 pnpm install
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
-pnpm --filter @pastescribe/web dev   # /en/login, /pt-br/login, /es/login...
+pnpm --filter @pastescribe/web dev   # /en, /en/app (redireciona pra /en/login sem sessão)
 ```
 
-Para testar o fluxo de auth de verdade: preencher `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` (projeto Supabase do dono, já existe, free tier) em `.env.local`, garantir que o provider Google esteja habilitado em Authentication → Providers no painel Supabase, e as migrations `0001`/`0002` estejam aplicadas nesse projeto (ver risco abaixo — ainda não estão).
+Para testar o fluxo autenticado de verdade: preencher `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` em `.env.local`, aplicar as migrations `0001`/`0002` no projeto Supabase (ver risco abaixo), logar via `/en/login`, e então visitar `/en/app` — deve mostrar o e-mail e o workspace pessoal (criado automaticamente pelo trigger `handle_new_user`).
 
 ## O que ficou de fora (deliberado)
 
-- **Estado autenticado no header/dashboard:** `/login` funciona isoladamente, mas o header continua mostrando "Sign In"/"Get Started Free" inertes mesmo após um login bem-sucedido — não existe ainda UI que reflita sessão ativa. Fatia 2.3 resolve isso junto com o dashboard mínimo.
-- **Cadastro por senha:** só login por senha existe (`signInWithPassword`); criar conta com senha exigiria uma tela própria de cadastro + confirmação de e-mail — fora de escopo, já que magic link/Google já cobrem criação de conta na prática.
-- **Dashboard e editor:** material do Stitch já salvo (`stitch-reference/`), mas a reconstrução espera dado real (Ondas 2.3 e 6).
+- **`/admin`**: sem agregados reais para mostrar ainda (ver seção acima) — não construído.
+- **Avatar de verdade**: `profiles` não tem coluna `avatar_url`; o "avatar" no header é um círculo colorido com a inicial do e-mail (honesto, sem inventar imagem).
+- **Cadastro por senha**: só login por senha existe; criar conta com senha exigiria tela própria + confirmação de e-mail — magic link/Google já cobrem criação de conta.
+- **Dashboard com dado de produto (histórico de transcrições etc.)**: não existe ainda a feature em si; `/app` mostra só o que é real hoje (conta, workspace).
 
 ## Riscos e limitações
 
-- **Nenhuma migration foi aplicada no projeto Supabase real do dono** — `0001_initial_schema.sql` e `0002_workspace_rls.sql` só rodaram neste sandbox (Postgres nativo). Sem aplicá-las lá, o login até funcionaria (GoTrue é independente do schema `public`), mas os triggers que criam `profiles`/`workspaces` no primeiro login não existiriam.
-- Auth real (magic link/Google/senha) não foi exercitada contra o GoTrue real neste sandbox — sem credenciais aqui. Ver seção de verificação acima.
-- Preços da pricing continuam ilustrativos (herdado da entrega anterior, inalterado).
-- Ambiente de execução deste sandbox tem particularidades de rede (Docker Hub bloqueado — afetou tanto `supabase start` quanto `supabase gen types` desta vez) e de processos em background (só o mecanismo nativo de background da ferramenta mantém `next start` vivo de forma confiável) — não afeta o código entregue, só o processo de QA local.
+- **Nenhuma migration foi aplicada no projeto Supabase real do dono** — `0001`/`0002` só rodaram neste sandbox (Postgres nativo). Sem aplicá-las lá, login funciona (GoTrue é independente do schema `public`) mas `/app` mostraria "nenhum workspace encontrado" (a UI já trata esse caso sem quebrar — `dict.app.workspaceFallback`).
+- Auth real (login completo + `/app` com sessão) não foi exercitada contra o GoTrue/Postgres reais — sem credenciais neste sandbox.
+- Preços da pricing continuam ilustrativos (herdado, inalterado).
+- Ambiente de execução deste sandbox tem particularidades de rede (Docker Hub bloqueado) e de processos em background (só o mecanismo nativo de background da ferramenta mantém `next start` vivo de forma confiável) — não afeta o código entregue, só o processo de QA local.
 
 ## Restrições que não podem ser violadas (inalteradas)
 
@@ -71,9 +66,9 @@ Não trabalhar em `main`; não fazer merge sem autorização; não alterar DNS/p
 ## Próximo passo exato
 
 1. Dono revisa/mergeia esta PR.
-2. Com autorização explícita do dono: aplicar `supabase/migrations/0001_initial_schema.sql` e `0002_workspace_rls.sql` no projeto Supabase real (via SQL Editor ou `supabase db push` com o projeto linkado), preencher `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` na Vercel, habilitar o provider Google em Authentication → Providers, e então testar o fluxo de login de ponta a ponta contra o projeto real (isso não pôde ser feito neste sandbox).
-3. Fatia 2.3: dashboard autenticado mínimo (usa o material do Stitch já salvo) + estado autenticado no `SiteHeader` (esconder "Sign In"/mostrar avatar+logout) + base do `/admin`.
+2. Com autorização explícita do dono: aplicar `supabase/migrations/0001_initial_schema.sql` e `0002_workspace_rls.sql` no projeto Supabase real (via SQL Editor ou `supabase db push` com o projeto linkado), preencher `NEXT_PUBLIC_SUPABASE_URL`/`NEXT_PUBLIC_SUPABASE_ANON_KEY` na Vercel, habilitar o provider Google em Authentication → Providers, e então testar o fluxo completo (login → `/app` → sign out) de ponta a ponta contra o projeto real — não pôde ser feito neste sandbox.
+3. Onda 3: gates de custo/orçamento para IA gratuita (ledger, reserva atômica, kill switches) — bloqueante antes de qualquer chamada real de transcrição, mesmo que a UI ainda não exista.
 
 ## Documentos de memória atualizados nesta sessão
 
-`docs/DECISIONS.md`, `.env.example`, `docs/HANDOFF.md` (este).
+`docs/DECISIONS.md`, `docs/HANDOFF.md` (este).

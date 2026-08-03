@@ -2,7 +2,9 @@ import Link from "next/link";
 
 import { LOCALES, LOCALE_SHORT_CODES } from "@pastescribe/i18n";
 import type { Dictionary, Locale } from "@pastescribe/i18n";
-import { Button, Logomark } from "@pastescribe/ui";
+import { Logomark } from "@pastescribe/ui";
+
+import { AuthHeaderStatus } from "./AuthHeaderStatus";
 
 /**
  * Header público — fiel ao Stitch (stitch-reference). Itens de nav sem
@@ -47,13 +49,13 @@ export function SiteHeader({ locale, dict, activeNavItem, currentPath = "" }: Si
             {dict.nav.pricing}
           </Link>
           <span
-            className="cursor-default text-sm font-semibold text-outline"
+            className="cursor-default text-sm font-semibold text-on-surface-variant"
             title={dict.nav.comingSoon}
           >
             {dict.nav.api}
           </span>
           <span
-            className="cursor-default text-sm font-semibold text-outline"
+            className="cursor-default text-sm font-semibold text-on-surface-variant"
             title={dict.nav.comingSoon}
           >
             {dict.nav.resources}
@@ -70,22 +72,14 @@ export function SiteHeader({ locale, dict, activeNavItem, currentPath = "" }: Si
                 className={
                   l === locale
                     ? "text-xs font-bold text-primary"
-                    : "text-xs font-semibold text-outline transition-colors hover:text-primary"
+                    : "text-xs font-semibold text-on-surface-variant transition-colors hover:text-primary"
                 }
               >
                 {LOCALE_SHORT_CODES[l]}
               </Link>
             ))}
           </nav>
-          <span
-            className="hidden cursor-default text-sm font-semibold text-outline sm:inline"
-            title={dict.nav.comingSoon}
-          >
-            {dict.nav.signIn}
-          </span>
-          <Button size="sm" disabled title={dict.nav.comingSoon}>
-            {dict.nav.getStarted}
-          </Button>
+          <AuthHeaderStatus locale={locale} dict={dict} />
         </div>
       </div>
     </header>

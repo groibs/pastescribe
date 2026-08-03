@@ -83,7 +83,7 @@ export default async function HomePage({ params }: PageProps) {
           </div>
 
           <div className="flex flex-col items-center gap-3">
-            <span className="text-xs font-semibold uppercase tracking-wider text-outline">
+            <span className="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
               {dict.home.platformsLabel}
             </span>
             <div className="flex flex-wrap justify-center gap-4 text-on-surface-variant opacity-70 sm:gap-6">
@@ -115,7 +115,7 @@ export default async function HomePage({ params }: PageProps) {
                   <span className="size-3 rounded-full bg-surface-variant" />
                   <span className="size-3 rounded-full bg-surface-variant" />
                 </div>
-                <span className="font-mono text-xs text-outline">{dict.home.demoUrl}</span>
+                <span className="font-mono text-xs text-on-surface-variant">{dict.home.demoUrl}</span>
               </div>
               <div
                 aria-hidden="true"
@@ -158,12 +158,9 @@ export default async function HomePage({ params }: PageProps) {
                   aria-hidden="true"
                   className="absolute left-0 top-6 h-24 w-1 rounded-r-full bg-primary"
                 />
-                {dict.home.demoLines.map((line, index) => (
-                  <div
-                    key={line.time}
-                    className={cx("flex gap-4 pl-2", index > 0 && "opacity-60")}
-                  >
-                    <span className="w-12 shrink-0 pt-1 font-mono text-xs text-outline">
+                {dict.home.demoLines.map((line) => (
+                  <div key={line.time} className="flex gap-4 pl-2">
+                    <span className="w-12 shrink-0 pt-1 font-mono text-xs text-on-surface-variant">
                       {line.time}
                     </span>
                     <div>

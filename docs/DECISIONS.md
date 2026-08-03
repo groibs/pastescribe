@@ -116,6 +116,20 @@ Cada decisão deve registrar data, status, contexto, decisão, consequências e 
 - **Decisão:** `apps/web/proxy.ts` (não `middleware.ts`) faz o refresh de sessão Supabase, seguindo o padrão oficial (retorna o mesmo objeto `response` mutado dentro de `setAll`, nunca um `NextResponse.next()` novo depois).
 - **Consequência:** nenhuma — é a convenção atual da versão do framework já em uso, sem mudança de comportamento.
 
+### 2026-08-03 — Estado de auth no header lido no client, não no server
+
+- **Status:** ativa
+- **Contexto:** `/{locale}` e `/{locale}/pricing` são SSG (`generateStaticParams`). Ler a sessão no `SiteHeader` (server component) exigiria `cookies()` dentro de `getSupabaseServerClient()`, e o Next.js marca qualquer rota que alcance `cookies()` como dinâmica — perderíamos a pré-renderização estática dessas duas páginas, que é um objetivo já verificado e valioso deste projeto (CDN-cacheable, rápido, sem depender de um request por página).
+- **Decisão:** o estado de auth no header (`Sign In`/`Get Started Free` vs. avatar+logout) vive em `AuthHeaderStatus` (`apps/web/app/_components/AuthHeaderStatus.tsx`), um client component que chama `supabase.auth.getUser()`/`onAuthStateChange()` no browser via `getSupabaseBrowserClient()` — nunca lê cookies no server para essa decisão de UI.
+- **Consequência:** existe um instante (`user === undefined`, antes do primeiro `useEffect` resolver) em que o header não mostra nem o estado logado nem o deslogado — renderiza um espaço reservado vazio do mesmo tamanho para não pular layout. Aceitável: é sub-segundo e não esconde nem finge nenhum estado. `/{locale}/app` (rota realmente autenticada) não tem esse problema — lê a sessão no server normalmente, porque já é inerentemente dinâmica (não pode ser SSG de qualquer forma).
+
+### 2026-08-03 — Achado real de contraste corrigido nesta sessão (não introduzido por ela)
+
+- **Status:** ativa
+- **Contexto:** ao rodar axe-core ao vivo contra o header (parte desta entrega), apareceram violações reais de `color-contrast` em elementos que esta sessão não tinha tocado: os spans inertes "API"/"Resources", os links do seletor de idioma para o locale não-ativo (ambos usavam o token `text-outline`, ~4.26:1 contra `bg-surface`, abaixo do mínimo de 4.5:1 para texto normal), e a seção de demo da home (`text-outline` no timestamp + `opacity-60` nas linhas de transcrição além da primeira, que reduz o contraste de qualquer cor por baixo do fundo).
+- **Decisão:** trocar `text-outline` por `text-on-surface-variant` (já comprovadamente compatível, usado em outros lugares do mesmo header) nesses pontos, e remover o `opacity-60` das linhas de transcrição do demo em vez de tentar calibrar uma opacidade "seguramente" acima do limiar.
+- **Consequência:** `text-outline` continua existindo como token (bom para ícones decorativos `aria-hidden` e estados `disabled` — isentos da regra de contraste do WCAG), mas não deve ser usado como cor de texto legível não-decorativo daqui pra frente. Verificado ao vivo: 0 violações em 8 combinações de página/locale após a correção.
+
 ## A confirmar (não bloqueiam as Ondas 1–7)
 
 - estratégia autorizada de obtenção de legenda/áudio **por plataforma** (pesquisa técnica/jurídica da Onda 8; até lá, upload é o caminho universal);
