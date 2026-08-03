@@ -96,6 +96,29 @@ export type Dictionary = {
     apiDocs: string;
     honesty: string;
   };
+  auth: {
+    heading: string;
+    lead: string;
+    notConfiguredTitle: string;
+    notConfiguredBody: string;
+    emailLabel: string;
+    emailPlaceholder: string;
+    magicLinkButton: string;
+    magicLinkSending: string;
+    magicLinkSentTitle: string;
+    magicLinkSentBody: string;
+    googleButton: string;
+    dividerOr: string;
+    passwordToggleShow: string;
+    passwordToggleHide: string;
+    passwordLabel: string;
+    passwordPlaceholder: string;
+    passwordButton: string;
+    passwordSigningIn: string;
+    errorGeneric: string;
+    errorCallback: string;
+    backToHome: string;
+  };
 };
 
 export const en: Dictionary = {
@@ -255,5 +278,30 @@ export const en: Dictionary = {
     apiDocs: "API Documentation",
     honesty:
       "Works with public videos from compatible sources or files you upload. No private content, no DRM bypass.",
+  },
+  auth: {
+    heading: "Sign in to PasteScribe",
+    lead: "Use a magic link, Google, or a password — whichever you prefer.",
+    notConfiguredTitle: "Sign-in isn't connected yet",
+    notConfiguredBody:
+      "This environment doesn't have a real Supabase project configured, so sign-in is disabled here. The page and its flows are fully built and ready for real credentials.",
+    emailLabel: "Email address",
+    emailPlaceholder: "you@example.com",
+    magicLinkButton: "Send magic link",
+    magicLinkSending: "Sending…",
+    magicLinkSentTitle: "Check your email",
+    magicLinkSentBody:
+      "We sent a sign-in link to {email}. Click it to continue — you can close this tab.",
+    googleButton: "Continue with Google",
+    dividerOr: "or",
+    passwordToggleShow: "Use a password instead",
+    passwordToggleHide: "Use a magic link instead",
+    passwordLabel: "Password",
+    passwordPlaceholder: "Your password",
+    passwordButton: "Sign in",
+    passwordSigningIn: "Signing in…",
+    errorGeneric: "Something went wrong. Please try again.",
+    errorCallback: "That sign-in link is invalid or expired. Request a new one below.",
+    backToHome: "Back to home",
   },
 };

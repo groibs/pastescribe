@@ -18,8 +18,11 @@ const serverEnvSchema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
 
   // SUPABASE (obrigatórias apenas a partir da Onda 2; validadas quando presentes)
-  SUPABASE_URL: z.string().url().optional(),
-  SUPABASE_ANON_KEY: z.string().min(1).optional(),
+  // URL + anon key não são segredo (protegidos por RLS) — por isso levam
+  // NEXT_PUBLIC_ e são lidas tanto no browser quanto no servidor com o
+  // mesmo valor. service_role é segredo e NUNCA leva esse prefixo.
+  NEXT_PUBLIC_SUPABASE_URL: z.string().url().optional(),
+  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.string().min(1).optional(),
   SUPABASE_SERVICE_ROLE_KEY: z.string().min(1).optional(),
 
   // AI — provider fake é o default absoluto (docs/AI_CALL_MATRIX.md)

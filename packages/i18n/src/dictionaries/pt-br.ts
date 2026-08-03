@@ -158,4 +158,29 @@ export const ptBr: Dictionary = {
     honesty:
       "Funciona com vídeos públicos de fontes compatíveis ou arquivos enviados por você. Sem conteúdo privado, sem contornar DRM.",
   },
+  auth: {
+    heading: "Entrar no PasteScribe",
+    lead: "Use um link mágico, o Google ou uma senha — o que preferir.",
+    notConfiguredTitle: "Login ainda não está conectado",
+    notConfiguredBody:
+      "Este ambiente não tem um projeto Supabase real configurado, então o login fica desabilitado aqui. A página e os fluxos já estão prontos para credenciais reais.",
+    emailLabel: "E-mail",
+    emailPlaceholder: "voce@exemplo.com",
+    magicLinkButton: "Enviar link mágico",
+    magicLinkSending: "Enviando…",
+    magicLinkSentTitle: "Confira seu e-mail",
+    magicLinkSentBody:
+      "Enviamos um link de acesso para {email}. Clique nele para continuar — você pode fechar esta aba.",
+    googleButton: "Continuar com Google",
+    dividerOr: "ou",
+    passwordToggleShow: "Usar uma senha",
+    passwordToggleHide: "Usar link mágico",
+    passwordLabel: "Senha",
+    passwordPlaceholder: "Sua senha",
+    passwordButton: "Entrar",
+    passwordSigningIn: "Entrando…",
+    errorGeneric: "Algo deu errado. Tente novamente.",
+    errorCallback: "Esse link de acesso é inválido ou expirou. Peça um novo abaixo.",
+    backToHome: "Voltar para a home",
+  },
 };
