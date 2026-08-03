@@ -70,8 +70,9 @@ Repositório de protótipo (dados mockados, sem backend). Útil: separação han
 
 ## 4. Auditoria da referência Stitch
 
-- ZIP `pastescribe-stitch-export.zip` está **truncado** (15 KB; sem central directory). Recuperados por parsing manual: `design/PASTESCRIBE_DESIGN.md` (íntegro, tokens completos), `design/LUMINA_LEXICON.md` (íntegro, variante com JetBrains Mono para timestamps), `html/dashboard.html` (parcial ~5,4 KB — confirma tokens no Tailwind config). **Perdidos:** home/editor/pricing HTML e os 5 screenshots `.webp`.
-- Consequência: direção visual e tokens estão seguros (docs íntegros + cópia versionada em `stitch-reference/design/`); fidelidade pixel-a-pixel das telas não é possível sem re-export. Registrado em `docs/DESIGN_SYSTEM.md` e `LESSONS_LEARNED.md`. Não bloqueia Ondas 0–5.
+- Na Onda 0, o ZIP `pastescribe-stitch-export.zip` estava **truncado** (15 KB; sem central directory) — só os dois docs de design e um HTML parcial foram recuperáveis (detalhe histórico em `LESSONS_LEARNED.md`).
+- **2026-08-03 (sessão seguinte):** o dono enviou o export original íntegro (1,9 MB). Substituído no repositório; confirmado com `unzip -t` sem erros. Material completo: logo, home, dashboard, editor, pricing — cada um com `code.html` + `screen.png` — e os dois `DESIGN.md`, que conferem exatamente com os tokens já consolidados em `docs/DESIGN_SYSTEM.md`.
+- Home e pricing foram reconstruídos com fidelidade real ao HTML/screenshot do Stitch (não copiado diretamente — reescrito com `packages/ui`, Tailwind, `next/font` para Inter/JetBrains Mono self-hosted e `lucide-react` no lugar dos Material Symbols via Google Fonts do export original, evitando dependência de fonte de ícone externa). Dashboard e editor ficam para as Ondas 2.3/6, quando houver dado real para preencher.
 
 ## 5. Skills comunitárias
 

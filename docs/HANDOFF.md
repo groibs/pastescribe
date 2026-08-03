@@ -1,84 +1,69 @@
 # HANDOFF — PasteScribe
 
-Última atualização: **2026-08-03** (Onda 0 + fatia 1.1 + fatia 1.2 mergeadas; Onda 2 fatia 2.1 em revisão)
+Última atualização: **2026-08-03** (Onda 0 + fatias 1.1/1.2 + Onda 2 fatia 2.1 mergeadas; reconstrução do site fiel ao Stitch em revisão)
 
 ## Branch e base
 
-- Base: `main` (PRs #2 e #3 já mergeadas a pedido do dono)
-- Branch desta entrega: `claude/pastescribe-wave-0-vqgzet` (recriada a partir do `main` pós-merge)
-- Estado: Onda 2 fatia 2.1 (migration inicial + RLS testada) implementada e verificada; PR aberta aguardando revisão. **Não fazer merge sem autorização.**
+- Base: `main` (PRs #2, #3, #4 já mergeadas a pedido do dono)
+- Branch desta entrega: `claude/pastescribe-wave-0-vqgzet`
+- Estado: home e pricing reconstruídas com fidelidade real ao Google Stitch; PR aberta aguardando revisão. **Não fazer merge sem autorização.**
 
-## Infraestrutura já criada pelo dono (2026-08-03)
+## Infraestrutura (inalterado desde a última entrega)
 
-- Projeto Vercel conectado ao repositório (free/Hobby), sem domínio próprio ainda.
-- Projeto Supabase criado (free tier). URL/chaves não vivem no repositório.
-- **Corrigido:** deploy da Vercel falhava por Root Directory incorreto (dashboard → `apps/web`) — sem mudança de código.
-- **Esclarecido com o dono:** "Supabase local" (docs/ARCHITECTURE.md) é o ambiente onde o Claude Code roda para testar migrations/RLS, não a máquina do dono. Neste sandbox específico, o `supabase start` (Docker) não funciona porque o pull de imagens do Docker Hub é bloqueado pela política de rede do ambiente — solução adotada: PostgreSQL nativo (via `apt`) + pgTAP, ver abaixo. Decisão completa em `docs/DECISIONS.md`.
+Vercel (free) + projeto Supabase (free) já criados pelo dono; deploy da Vercel corrigido (Root Directory = `apps/web`); domínio ainda não comprado; `docs/DECISIONS.md` tem os detalhes completos.
 
-## O que esta entrega contém (Onda 2, fatia 2.1)
+## O que esta entrega contém: reconstrução fiel ao Google Stitch
 
-**Migrations** (`supabase/migrations/`):
+O dono enviou o export original **íntegro** do Stitch (1,9 MB — o ZIP da Onda 0 estava truncado). Substituído em `stitch-reference/pastescribe-stitch-export.zip`. Material completo: logo, home, dashboard, editor, pricing (cada um com `code.html` + `screen.png`) + 2 docs de design. Detalhes em `docs/STITCH_REFERENCE.md` e `docs/RESEARCH_REPORT.md`.
 
-- `0001_initial_schema.sql` — `profiles`, `workspaces`, `workspace_members` (enum `workspace_role`: owner/admin/editor/viewer), `workspace_invites`, `feature_flags`, `app_settings`; triggers `set_updated_at`, `handle_new_workspace` (todo workspace nasce com o criador como owner) e `handle_new_user` (todo signup nasce com perfil + workspace pessoal — dispara o trigger anterior).
-- `0002_workspace_rls.sql` — RLS deny-by-default em todas as tabelas; `workspace_role_rank`/`is_workspace_member` (`SECURITY DEFINER`, `search_path` fixo) como único ponto de verdade sobre pertencimento; GRANTs explícitos por tabela (o Supabase atual **não** auto-expõe tabelas novas a `anon`/`authenticated` — cada tabela alcançável pelo client precisa de GRANT + policy concordando); `app_settings` sem GRANT nenhum para client (só `service_role`); `feature_flags` com leitura pública (nunca guarda segredo).
+**Reconstruído com fidelidade real (não copiado — reescrito com `packages/ui`, Tailwind, tokens):**
 
-**Regra de negócio testada:** admin não pode alterar/remover a linha de um `owner` (só transferência de propriedade dedicada, Onda 11); qualquer não-owner pode sair sozinho; owner não pode sair sozinho (evita workspace órfão).
+- **Home** (`apps/web/app/[locale]/page.tsx`): header, hero com `TranscribeBar` (novo componente) + plataformas suportadas, seção "Instant clarity" (demo estático não-interativo), grid de features (bento 2+1+1+2), footer. Idêntico em estrutura ao Stitch nos 3 locales.
+- **Pricing** (`apps/web/app/[locale]/pricing/`): heading, aviso de **draft** (preços ilustrativos, `docs/PASTESCRIBE_MONETIZATION.md`), toggle Monthly/Yearly **funcional** (`PricingToggle.tsx`, client component, sem chamada de rede), 3 cards de plano, banner de créditos, FAQ com `<details>/<summary>` nativos (acessível sem JS), aviso pay-as-you-go.
+- **`SiteHeader`/`SiteFooter`** (`apps/web/app/_components/`): compartilhados entre as duas páginas. Nav para páginas que ainda não existem (API, Resources, Sign In, Get Started) aparece **visualmente idêntica ao Stitch mas inerte** (não é link nem botão clicável) — nunca uma promessa que o produto ainda não cumpre. Seletor de idioma (EN/PT/ES) adicionado — não existe no Stitch, mas é requisito do produto (`docs/SEO.md`).
+- **`packages/ui`:** `TranscribeBar` (pílula ícone+input+botão, label ocultável) e `Logomark` (SVG inline dos documentos sobrepostos — não a imagem hotlinked do export), ambos testados com axe.
+- **Fontes e ícones:** Inter + JetBrains Mono via `next/font/google` (self-hosted, sem request ao Google em runtime); `lucide-react` no lugar dos Material Symbols do export (evita fonte de ícone externa). Foto de estoque do hero substituída por placeholder com tokens (não hotlinkamos o CDN do Google AI Studio).
+- **Tokens novos:** `inverse-surface`, `on-background`, `surface-bright`, `surface-variant`, `on-secondary-fixed-variant` — faltavam e causaram um bug real (mockup de vídeo sem fundo escuro) pego na verificação visual, corrigido.
 
-**Harness de teste local** (`supabase/tests/`, `scripts/test-db-local.sh`):
+## Verificação real feita nesta sessão (não só "deveria funcionar")
 
-- `fixtures/00_local_auth_shim.sql` — reproduz o contrato estável do schema `auth` do Supabase (users, `auth.uid()`, `auth.role()`, papéis `anon`/`authenticated`/`service_role`, incluindo o default privilege de `service_role` sobre tabelas futuras) **só para teste local — nunca aplicar no Supabase real**, que já fornece isso de verdade.
-- 6 arquivos pgTAP (`01`–`06`) cobrindo profiles, workspaces, workspace_members (incluindo a proteção do owner), workspace_invites, feature_flags/app_settings (anon/authenticated/service_role) e o trigger de signup.
-- **46/46 testes passando** neste sandbox via `bash scripts/test-db-local.sh`.
-
-**CI:** novo job `db-migrations-rls` em `.github/workflows/ci.yml` — instala PostgreSQL + pgTAP no runner (com internet normal do GitHub Actions, sem a restrição deste sandbox) e roda o mesmo `scripts/test-db-local.sh`, garantindo paridade entre verificação local e CI.
-
-**Docs atualizados:** `docs/DATABASE.md` (funções/triggers entregues), `docs/DECISIONS.md` (esclarecimento sobre "Supabase local").
-
-## Comandos executados e resultados
-
-```bash
-bash scripts/test-db-local.sh   # ok — 46 testes pgTAP (profiles, workspaces, members, invites, flags/settings, trigger)
-pnpm lint && pnpm typecheck && pnpm test && pnpm build   # ok — inalterado (54 testes JS/TS)
-```
+- **Screenshots via Playwright** (Chromium pré-instalado do ambiente) comparados visualmente com os screenshots originais do Stitch — home (en/pt-br/es) e pricing (en) batem estruturalmente; identifiquei e corrigi 1 bug real (tokens de cor faltando).
+- **axe-core direto contra o servidor real** (não só componentes isolados): 4 combinações de página/locale, **0 violações** após corrigir 2 achados reais:
+  - `scrollable-region-focusable` (sério) — painel de transcrição do demo não era focável por teclado; corrigido com `tabIndex={0}` + `role="group"` + `aria-label`.
+  - `heading-order` (moderado) — cards de plano na pricing pulavam de `h1` para `h3`; corrigido para `h2`.
+- **Mobile (375px)** verificado visualmente: header colapsa corretamente, seções empilham, sem scroll horizontal, touch targets ≥44px.
+- `pnpm lint && pnpm typecheck && pnpm test && pnpm build`: **61 testes**, 6 rotas SSG (`/en`, `/pt-br`, `/es`, `/en/pricing`, `/pt-br/pricing`, `/es/pricing`) + `/api/health`.
 
 ## Como testar
 
 ```bash
-# lado banco (requer PostgreSQL local com extensão pgtap — ver README do script)
-bash scripts/test-db-local.sh
-
-# lado web (inalterado desde a fatia 1.2)
-pnpm install && pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm install
+pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm --filter @pastescribe/web dev   # /en, /en/pricing, /pt-br, /es...
 ```
 
 ## O que ficou de fora (deliberado)
 
-- Aplicação das migrations no projeto Supabase real do dono — só acontece com confirmação explícita dele, quando o auth SSR (fatia 2.2) estiver pronto para usar.
-- Auth SSR (`@supabase/ssr`), telas de login/sessão, dashboard autenticado, admin base — fatias 2.2/2.3.
-- Fluxo de aceite de convite por token (`workspace_invites`) — chega com a feature de equipes (Onda 11); a tabela existe mas só é gerenciável por admin/owner hoje.
-- `packages/database` (tipos gerados do Supabase) — chega junto com a fatia 2.2, quando o client TS passar a consultar essas tabelas.
+- **Dashboard e editor:** material do Stitch já salvo (`stitch-reference/`), mas a reconstrução espera dado real (Ondas 2.3 e 6) — não faz sentido construir agora com dados fake permanentes.
+- Páginas para Tools/Platforms/Privacy/Terms/API Docs/API/Resources: ainda não existem; nav e footer apontam para elas de forma inerte (não-clicável), nunca com link morto.
+- `eslint-plugin-jsx-a11y`: adiado; a combinação typecheck + axe real contra o servidor já pegou os 2 problemas reais desta entrega.
 
 ## Riscos e limitações
 
-- O shim local de `auth` é uma aproximação do contrato público do Supabase (`auth.uid()`/`auth.role()` via `request.jwt.claims`) — fiel ao comportamento documentado, mas nunca testado contra o GoTrue real. Primeira aplicação no projeto real do dono deve ser acompanhada de perto.
-- `handle_new_user` usa `raw_user_meta_data ->> 'full_name'`/`'locale'` — nomes de campo a confirmar contra o que o fluxo de signup real (Onda 2.2, magic link/Google) efetivamente envia.
-- CI ainda não foi executado de verdade (job novo, será validado no primeiro push/PR desta fatia).
+- Preços da pricing são os números ilustrativos do próprio Stitch (Free $0/Creator $19/Pro $49), claramente marcados como draft — **não são preços aprovados**.
+- Toggle Yearly usa desconto de 20% calculado manualmente por mim (não vem de `docs/PASTESCRIBE_MONETIZATION.md`, que ainda não fixou números) — só ilustrativo.
+- Ambiente de execução deste sandbox tem particularidades de rede (Docker Hub bloqueado) e de processos em background (servidores `next start` encerrados no fim de uma chamada de shell não sobrevivem de forma confiável a menos que iniciados via o mecanismo nativo de background da ferramenta) — não afeta o código entregue, só o processo de QA local.
 
 ## Restrições que não podem ser violadas (inalteradas)
 
-Não trabalhar em `main`; não fazer merge sem autorização; não alterar DNS/produção; não inserir segredos; não liberar IA gratuita sem os gates da Onda 3; não aplicar migration no projeto Supabase real sem confirmação explícita do dono.
-
-## Decisões manuais pendentes (dono)
-
-- Confirmar quando aplicar `0001`/`0002` no projeto Supabase real (`yeupkcstbewufpptiypp`) — recomendo esperar a fatia 2.2 (auth SSR) para testar de ponta a ponta de uma vez.
-- Demais pendências inalteradas (provider de pagamento, host do worker, domínio).
+Não trabalhar em `main`; não fazer merge sem autorização; não alterar DNS/produção; não inserir segredos; não prometer feature que não existe; não liberar IA gratuita sem os gates da Onda 3.
 
 ## Próximo passo exato
 
-1. Dono revisa/mergeia a PR desta fatia (2.1).
-2. Nova branch para **fatia 2.2**: `@supabase/ssr`, magic link + Google + senha opcional, `packages/database` com tipos gerados, e — só então, com autorização — aplicar as migrations no projeto Supabase real.
-3. Fatia 2.3: dashboard autenticado mínimo + base do `/admin` (papel server-side).
+1. Dono revisa/mergeia esta PR.
+2. Nova branch para **Onda 2 fatia 2.2**: `@supabase/ssr`, magic link + Google + senha opcional, `packages/database` com tipos gerados — e, com autorização explícita, aplicar as migrations já prontas (`supabase/migrations/0001`/`0002`) no projeto Supabase real do dono.
+3. Fatia 2.3: dashboard autenticado mínimo (usa o material do Stitch já salvo) + base do `/admin`.
 
 ## Documentos de memória atualizados nesta sessão
 
-`docs/DATABASE.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md` (este).
+`docs/STITCH_REFERENCE.md`, `docs/RESEARCH_REPORT.md`, `docs/DESIGN_SYSTEM.md`, `LESSONS_LEARNED.md`, `docs/HANDOFF.md` (este).
