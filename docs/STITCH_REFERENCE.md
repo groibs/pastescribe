@@ -16,6 +16,17 @@ O pacote original continha:
 
 Foi reorganizado em `stitch-reference/` com nomes consistentes.
 
+## ⚠️ Estado real do arquivo (auditoria da Onda 0, 2026-08-03)
+
+O ZIP versionado está **truncado** (15 KB, sem end-of-central-directory; `unzip` falha). Recuperação por parsing manual dos local headers obteve:
+
+- `design/PASTESCRIBE_DESIGN.md` — **íntegro** (idêntico em conteúdo à cópia já versionada em `stitch-reference/design/`, com prose um pouco mais completa);
+- `design/LUMINA_LEXICON.md` — **íntegro** (variante de design com JetBrains Mono para timestamps; recuperado apenas via extração);
+- `html/dashboard.html` — **parcial** (~5,4 KB de 25,5 KB; confirma os tokens no Tailwind config);
+- `html/home.html`, `html/editor.html`, `html/pricing.html` e os 5 screenshots `.webp` — **ausentes do arquivo** (perdidos na truncagem).
+
+Consequências: os tokens e a direção visual estão seguros e consolidados em `docs/DESIGN_SYSTEM.md`; a comparação pixel-a-pixel com screenshots não é possível. Se o export original íntegro ainda existir, recomitá-lo melhora a fidelidade das Ondas 6/10 — não bloqueia as ondas de fundação. O script `scripts/extract-stitch-reference.sh` continua falhando com o ZIP atual por design (`unzip` estrito); a recuperação parcial foi feita manualmente.
+
 ## Estrutura
 
 O material limpo está preservado em:
