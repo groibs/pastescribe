@@ -88,6 +88,20 @@ Cada decisão deve registrar data, status, contexto, decisão, consequências e 
 - **Status:** ativa
 - **Decisão:** mídia temporária com TTL curto e exclusão automática; transcripts persistem até exclusão pelo usuário; analytics com retenção de 90 dias; exports com TTL curto. Política completa em `docs/DATABASE.md` §Retenção. Valores exatos de TTL configuráveis em `app_settings`.
 
+### 2026-08-03 — "Supabase local" da Onda 2 é ambiente de desenvolvimento, não a máquina do dono
+
+- **Status:** ativa
+- **Contexto:** o dono não tem como rodar Docker/Supabase CLI na própria máquina agora. `docs/ARCHITECTURE.md` já previa "ambiente local: Supabase CLI local" para desenvolvimento/teste de migrations e RLS — isso se refere ao ambiente onde o Claude Code roda (este sandbox), não ao computador do dono. Testado nesta sessão: o Docker daemon sobe no sandbox, mas o pull de imagens do Docker Hub (`production.cloudfront.docker.com`) é bloqueado pela política de rede do ambiente (403 no proxy) — logo `supabase start` (stack completo via Docker Compose) não funciona aqui. `apt-get`/`archive.ubuntu.com` funciona normalmente.
+- **Decisão:** escrever e testar migrations/RLS com **PostgreSQL nativo** (via `apt`, sem Docker) neste sandbox, simulando o contexto de RLS do Supabase (papéis `anon`/`authenticated`/`service_role`, `request.jwt.claims`, `auth.uid()`) em vez de depender do stack completo (Auth/Storage/Realtime) do `supabase start`. A aplicação real do schema no projeto Supabase hospedado do dono (`yeupkcstbewufpptiypp`) acontece via `supabase db push`/SQL Editor, sempre com confirmação explícita antes de tocar no projeto real.
+- **Consequência:** o dono não precisa instalar nada. Se ele tiver Docker na própria máquina no futuro, pode rodar `supabase start` normalmente para desenvolvimento local completo — não é obrigatório.
+
+### 2026-08-03 — Infra inicial em free tier, sem domínio
+
+- **Status:** ativa
+- **Decisão:** começar em Vercel free (Hobby) e Supabase free; domínio ainda não comprado. Nenhum plano pago é ativado sem decisão do dono.
+- **Consequências:** o site permanece `noindex` e sem DNS próprio; `APP_URL` continua vindo de config (nunca hardcode de domínio); limites do free tier (pausa de projeto Supabase por inatividade, limites de função da Vercel) são aceitos nesta fase; a compra do domínio `pastescribe.com` e o flip de indexação são gatilhos registrados em `docs/SEO.md` e no HANDOFF.
+- **Revisão:** ao preparar o lançamento público (Onda 10+) ou ao esbarrar em limite real do free tier.
+
 ## A confirmar (não bloqueiam as Ondas 1–7)
 
 - estratégia autorizada de obtenção de legenda/áudio **por plataforma** (pesquisa técnica/jurídica da Onda 8; até lá, upload é o caminho universal);

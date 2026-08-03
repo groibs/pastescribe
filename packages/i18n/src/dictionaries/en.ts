@@ -11,6 +11,10 @@ export type Dictionary = {
     valuesHeading: string;
     values: readonly string[];
     languageLabel: string;
+    previewBadge: string;
+    previewLabel: string;
+    previewHint: string;
+    previewCta: string;
   };
   footer: {
     honesty: string;
@@ -37,6 +41,10 @@ export const en: Dictionary = {
       "Clear pricing: free taste, pay per video, credits or plans",
     ],
     languageLabel: "Language",
+    previewBadge: "In development",
+    previewLabel: "Paste a video link",
+    previewHint: "Not accepting links yet — the cost and security foundation comes first.",
+    previewCta: "Get transcript",
   },
   footer: {
     honesty:
