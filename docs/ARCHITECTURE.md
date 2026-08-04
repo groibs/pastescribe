@@ -2,180 +2,213 @@
 
 Criado na Onda 0 em 2026-08-03. Válido até substituição registrada em `docs/DECISIONS.md`.
 
-Versões validadas na pesquisa da Onda 0 (`docs/RESEARCH_REPORT.md`): Next.js 16.2.x, Tailwind CSS 4.3.x, `@supabase/ssr`, Supabase Queues/pgmq, Node 22, Python 3.11+.
+Versões-base: Next.js 16.2.x, Tailwind CSS 4.3.x, `@supabase/ssr`, PostgreSQL/Supabase, Node 22, Python 3.11+.
 
 ## Visão geral
 
 Dois planos de execução, um banco como fonte de verdade:
 
 ```text
-┌────────────────────────────────────────────────────────────────────┐
-│                            USUÁRIO                                 │
-│        navegador (site público, dashboard, editor, admin)          │
-└──────────────┬─────────────────────────────────────────────────────┘
-               │ HTTPS
-┌──────────────▼─────────────────────────────────────────────────────┐
-│  apps/web — Next.js App Router (Vercel)                            │
-│  · páginas públicas com SSG/SSR + i18n (en, pt-BR, es)             │
-│  · auth via @supabase/ssr (cookies; sem token no client storage)   │
-│  · rotas server-side: criação de job, billing, quota, admin        │
-│  · NUNCA: download de mídia, FFmpeg, chamadas longas, segredos     │
-│    no bundle                                                       │
-└───────┬──────────────────────────────┬─────────────────────────────┘
-        │ SQL/RPC (anon+RLS ou         │ enqueue (RPC atômica:
-        │ service role só no server)   │ reserva orçamento + job)
-┌───────▼──────────────────────────────▼─────────────────────────────┐
-│  Supabase (PostgreSQL + Auth + RLS + Storage pequeno)              │
-│  · fonte de verdade: perfis, workspaces, jobs, transcripts,        │
-│    ledger de créditos, ledger de uso, reservas de orçamento,       │
-│    quotas duráveis, feature flags, app_settings                    │
-│  · fila durável de jobs em tabela própria (claim atômico via       │
-│    FOR UPDATE SKIP LOCKED; migração futura p/ pgmq sem mudar       │
-│    domínio — interface QueuePort)                                  │
-│  · funções SECURITY DEFINER p/ quota, reserva, ledger, claim       │
-└───────▲──────────────────────────────▲─────────────────────────────┘
-        │ poll/claim + heartbeat       │ resultados, custo real,
-        │ (service role, egress        │ transições de estado
-        │ restrito)                    │
-┌───────┴──────────────────────────────┴─────────────────────────────┐
-│  apps/worker — Python 3.11+/FastAPI em container (host a definir:  │
-│  Railway/Render/Fly/VPS — código agnóstico de provedor)            │
-│  · ingestão de URL (adapters com allowlist + proteção SSRF)        │
-│  · download autorizado, ffprobe/FFmpeg, normalização de áudio      │
-│  · transcrição via provider (fake local | OpenAI)                  │
-│  · pós-processamento, segmentação, timestamps, diarização          │
-│  · idempotência, lease/heartbeat, retries finitos, cancelamento    │
-│  · limpeza de arquivos temporários (TTL curto)                     │
-└───────┬────────────────────────────────────────────────────────────┘
-        │ S3-compatible (URLs assinadas, TTL)
-┌───────▼────────────────────────────────────────────────────────────┐
-│  Storage de mídia temporária                                       │
-│  · dev: MinIO/filesystem local  · prod: Cloudflare R2 (a ativar)   │
-│  · mídia NUNCA é permanente por padrão; exclusão automática        │
-└────────────────────────────────────────────────────────────────────┘
-
-Serviços externos (todos atrás de kill switch e provider fake local):
-· OpenAI (transcrição + Responses/Structured Outputs) — chaves free e
-  paid separadas, só no worker/servidor
-· Stripe test mode (billing) — abstração BillingPort
-· Cloudflare Turnstile (anti-abuso pré-operação paga)
-· e-mail transacional (a definir; fake local até lá)
+USUÁRIO
+  │ HTTPS
+  ▼
+apps/web — Next.js/Vercel
+  · páginas públicas, dashboard, editor e admin
+  · auth SSR/cookies
+  · rotas server-side de autorização, quota, billing e criação de jobs
+  · nunca executa download longo, FFmpeg ou processamento pesado
+  │ SQL/RPC
+  ▼
+Supabase — Postgres/Auth/RLS
+  · workspaces, jobs, transcripts, ledger, orçamento, quota, flags
+  · fila durável em tabelas de domínio + funções atômicas
+  ▲ poll/claim/heartbeat/resultados
+  │
+apps/worker — Python/FastAPI/FFmpeg
+  · ingestão autorizada, ffprobe/FFmpeg, normalização e providers
+  · operações longas, lease, progresso, retries, cancelamento e cleanup
+  │ S3-compatible
+  ▼
+Storage temporário
+  · dev local; produção alvo R2
+  · URLs assinadas, TTL e exclusão automática
 ```
+
+Serviços externos ficam atrás de provider fake e kill switch: OpenAI, billing, Turnstile e e-mail.
 
 ## Monorepo
 
 ```text
 pastescribe/
-├── apps/
-│   ├── web/            # Next.js 16 App Router, TS estrito, Tailwind 4
-│   └── worker/         # Python (uv), FastAPI, FFmpeg — a partir da Onda 4
-├── packages/
-│   ├── config/         # env tipada (zod) + feature flags centralizadas
-│   ├── contracts/      # schemas zod: estados de job, eventos, DTOs
-│   ├── ui/             # design system (a partir da Onda 1/6)
-│   ├── database/       # tipos gerados do Supabase + helpers
-│   ├── ai/             # AIProviderPort: fake local | openai
-│   ├── billing/        # BillingPort: fake local | stripe test
-│   ├── storage/        # StoragePort: local | s3-compatible
-│   ├── analytics/      # catálogo fechado de eventos sem PII
-│   ├── i18n/           # mensagens en/pt-BR/es + helpers de locale
-│   └── observability/  # logger estruturado sem PII, request/job id
-├── supabase/           # config.toml, migrations, seed — a partir da Onda 2
-├── content/            # seo/blog/help por locale — a partir da Onda 10
-├── docs/               # canônicos
-├── .claude/            # memória operacional + skills
-├── scripts/
-├── stitch-reference/
-├── pnpm-workspace.yaml
-└── turbo.json
+├── apps/web
+├── apps/worker
+├── packages/config
+├── packages/contracts
+├── packages/ui
+├── packages/database
+├── packages/ai
+├── packages/billing
+├── packages/storage
+├── packages/analytics
+├── packages/i18n
+├── packages/observability
+├── supabase
+├── docs
+└── scripts
 ```
 
-Ferramentas: `pnpm` (workspaces), Turborepo (tarefas), `uv` (Python), Docker (worker e serviços locais), Supabase CLI (migrations/local).
+Ferramentas: pnpm/Turborepo, uv, FFmpeg, Docker quando disponível e Supabase CLI/PostgreSQL nativo para migrations/testes.
 
-## Decisões estruturais
+## Web na Vercel, processamento fora
 
-### Web na Vercel, processamento fora
+A web valida, autoriza, reserva, enfileira e lê estado. Funções da Vercel não fazem scraping, download de mídia, FFmpeg nem chamadas longas.
 
-Funções da Vercel não fazem scraping, download, FFmpeg nem chamadas longas. A web só: valida, autoriza, reserva orçamento, enfileira e lê estado. Todo trabalho pesado é do worker.
+## Filas e domínios de jobs
 
-### Fila durável no PostgreSQL
+### Transcrição
 
-Início: tabela `transcription_jobs` + função SQL de claim com `FOR UPDATE SKIP LOCKED`, lease com heartbeat, `next_attempt_at`, `retry_count`, dead-letter, prioridade, cancelamento e `idempotency_key` única por operação lógica. Sem Redis.
+`transcription_jobs` é específico do domínio de transcrição, com claim atômico `FOR UPDATE SKIP LOCKED`, lease/heartbeat, retries finitos, dead-letter, prioridade e idempotência.
 
-O worker consome via `QueuePort` (interface estreita: `claim`, `heartbeat`, `complete`, `fail`, `cancel`). Se um dia migrar para pgmq/Supabase Queues ou outro sistema, muda o adapter, não o domínio. Justificativa: custo zero adicional, transacional com o resto do estado (reserva de orçamento + job na mesma transação), suficiente para o volume inicial.
+### Renderização futura de vídeo legendado
 
-### Reserva de orçamento antes de qualquer job gratuito
+Não generalizar `transcription_jobs` e não forçar renderização dentro dela.
 
-Sequência obrigatória, numa única transação SQL (função `SECURITY DEFINER`):
+Decisão de planejamento:
 
-1. estimar custo máximo (duração × tarifa do modelo × fator de segurança);
-2. validar orçamento diário e mensal do free (`budget_periods`);
-3. validar quota individual, por IP e concorrência (`quota_counters`);
-4. inserir `budget_reservations` (estado `reserved`);
-5. inserir job `queued` com `idempotency_key`.
+- a Onda 6.4 criará `render_jobs` separados somente quando houver consumidor real;
+- transcrição e renderização podem compartilhar runtime do worker, portas de execução, storage, ledger de uso e observabilidade;
+- cada domínio preserva estados, autoridade financeira, inputs, outputs, idempotência, retries, cancelamento e TTL próprios;
+- uma fila física comum, se necessária, fica atrás de adapters/QueuePorts e não transforma os modelos de domínio numa tabela genérica;
+- nenhuma migration de renderização entra durante o planejamento ou na fatia 4.2c.
 
-Falhou qualquer passo → nada é criado (fail-closed). Job concluído → reconciliação: custo real registrado em `usage_ledger_entries`, excedente da reserva liberado. Falha do sistema → reserva liberada, sem cobrança ao usuário. Contador crítico indisponível → operação gratuita negada (fail-closed), pagos seguem por caminho próprio.
+Revisão explícita antes da primeira migration de `render_jobs`. Detalhes em `docs/CAPTIONED_VIDEO_EXPORT.md`.
 
-### Free e paid separados
+## Runtime de mídia do worker — obrigação da Onda 4.2c
 
-- chaves/projetos OpenAI distintos (`OPENAI_FREE_*`, `OPENAI_PAID_*`);
-- kill switches independentes (`free_ai_enabled`, `openai_enabled`);
-- fila com prioridade: paid nunca espera esgotamento do free;
-- orçamento do free nunca bloqueia job pago (jobs pagos debitam créditos do usuário via ledger, não o orçamento do produto).
+O worker deve nascer com uma abstração testável de execução de mídia, por exemplo `FFmpegPort`, sem comandos espalhados pelo domínio.
 
-### Estados do job (máquina canônica)
+Contrato mínimo:
+
+- probe de metadados com `ffprobe`;
+- execução FFmpeg com argumentos permitidos, timeout e processo isolado;
+- callbacks/eventos de progresso estruturado;
+- heartbeat de lease independente do parsing de stdout;
+- cancelamento cooperativo quando seguro;
+- limites de CPU, memória, disco, duração e bytes de output;
+- diretório temporário por operação;
+- cleanup em sucesso, falha, cancelamento e timeout;
+- execução sem rede para processamento de arquivos locais;
+- códigos de erro estáveis e retries finitos;
+- fixtures pequenas e determinísticas.
+
+Isso é P0 arquitetural porque o worker ainda não existe. Não autoriza construir editor, checkout, presets ou renderização completa na Onda 4.
+
+## Storage temporário
+
+`StoragePort` atual oferece upload presignado, metadata, range e delete. Ele continua válido para a ingestão.
+
+A evolução para outputs deve acontecer quando houver consumidor real, sem transformar `media_assets` prematuramente em tabela genérica. O domínio futuro de renderização precisa conseguir:
+
+- gravar output por key opaca;
+- obter metadata/checksum;
+- emitir GET assinado de curta duração;
+- registrar TTL;
+- deletar idempotentemente;
+- distinguir original, temporário de processamento e output final temporário.
+
+Original e output não são permanentes por padrão.
+
+## Orçamento e ledger
+
+### Transcrição gratuita
+
+A duração real é descoberta pelo worker; só então `reserve_job_budget` reserva orçamento de IA e avança o job.
+
+### Renderização
+
+Renderização não é chamada de IA. Custos de CPU, memória, disco, storage e egress pertencem a categoria separada de mídia/processamento.
+
+Quando implementada:
+
+- quote, entitlement, reserva e captura são server-side;
+- uso de transcrição e renderização permanece categorizado separadamente;
+- falha interna libera/estorna reserva;
+- retries e reload não cobram novamente;
+- orçamento free de renderização pode ser suspenso sem afetar paid.
+
+Não criar tabelas/colunas antes da Onda 6.4/9.
+
+## Estados da transcrição
+
+A máquina canônica vive em `packages/contracts`. O worker Python porta a mesma regra e não inventa transições.
 
 ```text
 created → validating → awaiting_user_confirmation → queued
   → resolving_metadata → fetching_captions → acquiring_media
   → extracting_audio → normalizing_audio → transcribing
   → diarizing → postprocessing → indexing → completed
-qualquer estado ativo → failed | cancel_requested → cancelled
-queued/awaiting → expired (TTL)
+qualquer ativo → failed | cancel_requested → cancelled
+queued/awaiting → expired
 ```
 
-Transições validadas no servidor, registradas em `job_steps` com timestamps, e auditáveis. O schema canônico vive em `packages/contracts` e é a única fonte para web e worker.
+Estados de renderização serão definidos separadamente quando o schema existir.
 
-### Ingestão de links por adapters
+## Ingestão de links
 
-Interface por plataforma (`canHandle`, `validate`, `resolveMetadata`, `getNativeCaptions`, `acquireAuthorizedMedia`, capacidades e `riskLevel`), ativação por feature flag. Nenhum fetch genérico de URL arbitrária. Proteção SSRF completa (ver `docs/THREAT_MODEL.md`). Nenhum adapter é ativado antes de pesquisa técnica/jurídica específica por plataforma (Onda 8); upload manual é o fallback universal e chega antes (Onda 4).
+Adapters por plataforma, allowlist, SSRF completa e ativação por flag. Nenhum fetch genérico de URL arbitrária. Upload é o fallback universal.
 
-### Autenticação e autorização
+## Autenticação e autorização
 
-- Supabase Auth com `@supabase/ssr` (cookies), magic link + Google + senha opcional;
-- RLS ativa em toda tabela exposta; usuário só vê workspaces dos quais participa;
-- service role apenas em servidor/worker; nunca em bundle;
-- admin validado server-side por papel em banco, não por UI;
-- API keys (Onda 11) com hash + scopes, exibidas uma única vez.
+- Supabase Auth com cookies;
+- RLS por workspace;
+- service role apenas no servidor/worker;
+- admin verificado server-side;
+- API keys futuras com hash e scopes.
 
-### Comunicação web ↔ worker
+Quote, preço, entitlement, saldo, resolução autorizada e compra nunca são aceitos como autoridade do client.
 
-O worker não expõe endpoints públicos de negócio. Estado compartilhado passa pelo banco. Endpoints internos do worker (health/readiness/cancel-hint) exigem HMAC com segredo rotacionável. Egress do worker restrito a allowlist (plataformas suportadas, OpenAI, storage).
+## Comunicação web ↔ worker
+
+Estado compartilhado passa pelo banco. Endpoints internos de health/readiness/cancel-hint exigem autenticação interna. Egress do worker é restrito.
 
 ## Ambientes
 
 | Ambiente | Web | Banco | Worker | Providers |
 |---|---|---|---|---|
-| local | `pnpm dev` | Supabase CLI local | Docker local | todos fake |
-| test/CI | build + testes | Postgres efêmero | testes pytest | todos fake |
-| preview | Vercel preview | projeto Supabase dev | opcional | fake por padrão |
-| production | Vercel | Supabase | container host | reais, atrás de flags |
-
-Variáveis por grupo (`APP`, `SUPABASE`, `OPENAI_FREE`, `OPENAI_PAID`, `STORAGE`, `WORKER`, `TURNSTILE`, `BILLING`, `EMAIL`, `ANALYTICS`, `SENTRY`, `ADMIN`), documentadas em `.env.example`, validadas no boot por `packages/config`. Nenhum segredo com prefixo público (`NEXT_PUBLIC_*`).
+| local | pnpm dev | Postgres/Supabase local | worker local | fake |
+| test/CI | build/testes | Postgres efêmero | pytest/fixtures | fake |
+| preview | Vercel preview | Supabase dev | opcional | fake por padrão |
+| production | Vercel | Supabase | container host | reais atrás de flags |
 
 ## Observabilidade
 
-- logs estruturados com `request_id`/`job_id`, sem transcript, e-mail, URL completa privada ou token;
-- métricas de fila (profundidade, latência por etapa, retries, dead-letter);
-- custo estimado × real por job, por modelo e por plataforma;
-- Sentry (ou adapter equivalente) atrás de env; healthcheck/readiness no worker;
-- painel admin lê agregados, nunca conteúdo.
+Logs usam request/job/operation id e nunca incluem transcript, legenda, e-mail, URL privada/assinada ou token.
+
+Métricas de transcrição:
+
+- profundidade e latência de fila;
+- etapa, retries, dead-letter;
+- custo estimado/real por modelo.
+
+Métricas comuns de mídia, obrigatórias desde 4.2c:
+
+- `operation_kind`;
+- wall time;
+- CPU aproximada quando disponível;
+- memória e disco máximos;
+- duração;
+- bytes de entrada/saída;
+- codec, frame rate, largura e altura;
+- tentativas, timeout, cancelamento e resultado.
 
 ## O que esta arquitetura proíbe
 
-- chamada paga em reload, montagem, duplo clique ou texto fixo;
-- scraping evasivo, DRM, conteúdo privado, contorno de bloqueio;
-- mídia de terceiros armazenada permanentemente ou publicamente;
-- "ilimitado" sem fair use e margem comprovada;
-- segredo no client; crédito/plano/papel concedidos pelo client;
-- schema alterado fora de migration.
+- chamada paga em reload, mount ou duplo clique;
+- processamento pesado na Vercel;
+- scraping evasivo/DRM/conteúdo privado;
+- mídia permanente ou pública por padrão;
+- renderização dentro de `transcription_jobs` por conveniência;
+- schema genérico sem consumidor real;
+- preço, crédito, papel, entitlement ou pagamento concedidos pelo client;
+- segredo no client;
+- mudança de schema fora de migration.
