@@ -46,4 +46,6 @@ async def ready() -> dict[str, Any]:
         "ffprobe": config.ffprobe_binary,
         "ffmpeg": config.ffmpeg_binary,
         "autostart": config.autostart,
+        "supabaseConfigured": config.supabase_configured,
+        "storageProvider": config.storage_provider,
     }

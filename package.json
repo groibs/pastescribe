@@ -11,7 +11,7 @@
     "dev:worker": "uv run --project apps/worker uvicorn pastescribe_worker.app:app --host 0.0.0.0 --port 8001 --reload",
     "build": "turbo run build && uv run --project apps/worker python -m compileall -q apps/worker/src",
     "lint": "turbo run lint && uv run --project apps/worker ruff check apps/worker",
-    "typecheck": "turbo run typecheck && uv run --project apps/worker mypy apps/worker/src",
+    "typecheck": "turbo run typecheck && uv run --project apps/worker mypy --config-file apps/worker/pyproject.toml apps/worker/src",
     "test": "turbo run test && uv run --project apps/worker pytest -q apps/worker/tests"
   },
   "devDependencies": {
