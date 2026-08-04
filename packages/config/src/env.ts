@@ -30,8 +30,14 @@ const serverEnvSchema = z.object({
   OPENAI_FREE_API_KEY: z.string().min(1).optional(),
   OPENAI_PAID_API_KEY: z.string().min(1).optional(),
 
-  // STORAGE
+  // STORAGE — s3 aqui é qualquer backend S3-compatible (R2 em produção),
+  // nunca hardcoded pro provider específico.
   STORAGE_PROVIDER: z.enum(["local", "s3"]).default("local"),
+  S3_ENDPOINT: z.string().url().optional(),
+  S3_BUCKET: z.string().min(1).optional(),
+  S3_REGION: z.string().min(1).optional(),
+  S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
 
   // BILLING
   BILLING_PROVIDER: z.enum(["fake", "stripe_test"]).default("fake"),
@@ -68,6 +74,14 @@ export function parseServerEnv(
   if (env.AI_PROVIDER === "openai" && !env.OPENAI_FREE_API_KEY && !env.OPENAI_PAID_API_KEY) {
     throw new EnvValidationError(
       "AI_PROVIDER=openai exige OPENAI_FREE_API_KEY e/ou OPENAI_PAID_API_KEY"
+    );
+  }
+  if (
+    env.STORAGE_PROVIDER === "s3" &&
+    (!env.S3_ENDPOINT || !env.S3_BUCKET || !env.S3_REGION || !env.S3_ACCESS_KEY_ID || !env.S3_SECRET_ACCESS_KEY)
+  ) {
+    throw new EnvValidationError(
+      "STORAGE_PROVIDER=s3 exige S3_ENDPOINT, S3_BUCKET, S3_REGION, S3_ACCESS_KEY_ID e S3_SECRET_ACCESS_KEY"
     );
   }
   return env;

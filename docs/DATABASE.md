@@ -2,7 +2,7 @@
 
 Criado na Onda 0 em 2026-08-03. Este documento define o desenho; o estado real é sempre o das migrations em `supabase/migrations/`. Divergência entre este doc e migration = migration vence + atualizar este doc.
 
-**Entregue:** identidade/workspaces (Onda 2, `0001`–`0002`) e billing/ledger/orçamento/quota (Onda 3 fatia 3.1, `0003`–`0005`, ver §Funções SQL atômicas). Ainda não entregue: `billing_customers`/`subscriptions`/`payment_events` (fatia 3.3), `abuse_signals`/`abuse_events` (sem lógica de abuso real para escrever neles ainda), tudo de Onda 4+.
+**Entregue:** identidade/workspaces (Onda 2, `0001`–`0002`), billing/ledger/orçamento/quota (Onda 3 fatia 3.1, `0003`–`0005`, ver §Funções SQL atômicas), `platform_admins` (Onda 3 fatia 3.3, `0006`) e `media_assets` (Onda 4 fatia 4.1, `0007`). Ainda não entregue: `billing_customers`/`subscriptions`/`payment_events`, `abuse_signals`/`abuse_events` (sem lógica de abuso real para escrever neles ainda), `transcription_jobs` e o resto de Onda 4+.
 
 Convenções: UUID (`gen_random_uuid()`) como PK, `created_at`/`updated_at` timestamptz, FKs com `on delete` explícito, índices para todo padrão de acesso real, RLS ativa em toda tabela exposta.
 
@@ -40,7 +40,7 @@ Convenções: UUID (`gen_random_uuid()`) como PK, `created_at`/`updated_at` time
 - `job_steps` — transições auditáveis: job, de→para, timestamp, ator (web|worker|admin), duração.
 - `job_attempts` — tentativa n, worker id, resultado, métricas.
 - `media_sources` — URL normalizada (hash para dedup), plataforma, metadados públicos (título, duração, idioma, thumbnail), ou referência de upload.
-- `media_assets` — objetos no storage temporário: bucket, chave, MIME real, tamanho, checksum, TTL, estado de limpeza.
+- `media_assets` — **entregue (Onda 4 fatia 4.1, `0007`)**. Objeto no storage temporário: `workspace_id`, `created_by`, `storage_key` (UUID opaco, único — nunca o nome original), `original_filename` (só exibição, sanitizado, ≤255 chars), `status: pending_upload|validated|rejected|deleted`, `declared_content_type`/`declared_size_bytes` (o que o client alegou no início do upload) vs `actual_content_type`/`actual_size_bytes` (o que o servidor confirmou de verdade via `headObject` + MIME sniffing dos bytes reais — nunca confiar só no declarado), `rejection_reason`, `expires_at` (TTL de quarentena — limpeza automática é trabalho futuro), `validated_at`/`deleted_at`. RLS: `editor+` do workspace pode INSERT (com `created_by = auth.uid()` forçado via WITH CHECK), `viewer+` pode SELECT; **nenhuma policy de UPDATE/DELETE para `authenticated`** — toda transição de status (`validated`/`rejected`/`deleted`) é exclusiva de `service_role`, mesmo padrão de `platform_admins`. Checksum ainda não existe (não há uso real pra ele até dedup entrar em pauta).
 - `platform_adapters` — registro operacional por plataforma: flag, status (`active|degraded|disabled`), risco, última verificação.
 
 ### Transcript e derivados (Onda 4/6/7)

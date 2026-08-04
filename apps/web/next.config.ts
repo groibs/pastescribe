@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     "@pastescribe/contracts",
     "@pastescribe/database",
     "@pastescribe/i18n",
+    "@pastescribe/storage",
   ],
   async redirects() {
     return [
