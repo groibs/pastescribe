@@ -22,6 +22,7 @@ export type { TranscribeBarProps } from "./TranscribeBar";
 export { ProgressSteps } from "./ProgressSteps";
 export type {
   ProgressStep,
+  ProgressStepStateLabels,
   ProgressStepsProps,
   ProgressStepsStatus,
 } from "./ProgressSteps";
