@@ -31,7 +31,7 @@ select throws_ok(
      values (gen_random_uuid(), 'a1111111-1111-1111-1111-111111111111', gen_random_uuid(), 'direct-insert') $$,
   '42501',
   null,
-  'authenticated não consegue criar job direto — só via reserve_free_budget_and_enqueue (SECURITY DEFINER)'
+  'authenticated não consegue criar job direto — só via enqueue_job (SECURITY DEFINER)'
 );
 
 reset role;

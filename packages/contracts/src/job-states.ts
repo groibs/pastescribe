@@ -80,6 +80,9 @@ export const JOB_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> =
     queued: [...pipelineSuccessors("queued"), "failed", "cancel_requested", "expired"],
     resolving_metadata: [
       ...pipelineSuccessors("resolving_metadata"),
+      // Duração pública da plataforma já dá pra saber aqui (link) se
+      // excede o free — sem custo de IA nenhum até este ponto.
+      "awaiting_user_confirmation",
       "failed",
       "cancel_requested",
     ],
@@ -90,6 +93,9 @@ export const JOB_TRANSITIONS: Readonly<Record<JobState, readonly JobState[]>> =
     ],
     acquiring_media: [
       ...pipelineSuccessors("acquiring_media"),
+      // Duração real (ffprobe, upload) só existe depois de baixar a
+      // mídia — é aqui que reserve_job_budget decide se cabe no free.
+      "awaiting_user_confirmation",
       "failed",
       "cancel_requested",
     ],

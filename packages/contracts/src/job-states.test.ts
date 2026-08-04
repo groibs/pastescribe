@@ -48,6 +48,12 @@ describe("máquina de estados do job", () => {
     expect(isValidJobTransition("cancelled", "queued")).toBe(false);
   });
 
+  it("permite gate de orçamento assim que a duração real é conhecida", () => {
+    expect(isValidJobTransition("acquiring_media", "awaiting_user_confirmation")).toBe(true);
+    expect(isValidJobTransition("resolving_metadata", "awaiting_user_confirmation")).toBe(true);
+    expect(isValidJobTransition("extracting_audio", "awaiting_user_confirmation")).toBe(false);
+  });
+
   it("identifica estados terminais", () => {
     expect(isTerminalJobState("completed")).toBe(true);
     expect(isTerminalJobState("failed")).toBe(true);
