@@ -25,6 +25,28 @@ export type BudgetReservationStatus = "reserved" | "captured" | "released" | "ex
 export type UsageOrigin = "free" | "paid";
 export type MediaAssetStatus = "pending_upload" | "validated" | "rejected" | "deleted";
 export type BillingInterval = "monthly" | "yearly";
+export type TranscriptionJobSourceKind = "upload";
+export type JobStepActor = "web" | "worker" | "admin";
+/** Espelha packages/contracts/src/job-states.ts (JOB_STATES) — fonte canônica. */
+export type JobState =
+  | "created"
+  | "validating"
+  | "awaiting_user_confirmation"
+  | "queued"
+  | "resolving_metadata"
+  | "fetching_captions"
+  | "acquiring_media"
+  | "extracting_audio"
+  | "normalizing_audio"
+  | "transcribing"
+  | "diarizing"
+  | "postprocessing"
+  | "indexing"
+  | "completed"
+  | "failed"
+  | "cancel_requested"
+  | "cancelled"
+  | "expired";
 
 export type Database = {
   public: {
@@ -663,6 +685,138 @@ export type Database = {
           },
         ];
       };
+      transcription_jobs: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          created_by: string;
+          source_kind: TranscriptionJobSourceKind;
+          media_asset_id: string;
+          state: JobState;
+          priority: number;
+          idempotency_key: string;
+          lease_owner: string | null;
+          lease_expires_at: string | null;
+          heartbeat_at: string | null;
+          retry_count: number;
+          max_retries: number;
+          next_attempt_at: string;
+          dead_letter: boolean;
+          cancel_requested_at: string | null;
+          budget_reservation_id: string | null;
+          error_code: string | null;
+          error_detail: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          created_by: string;
+          source_kind?: TranscriptionJobSourceKind;
+          media_asset_id: string;
+          state?: JobState;
+          priority?: number;
+          idempotency_key: string;
+          lease_owner?: string | null;
+          lease_expires_at?: string | null;
+          heartbeat_at?: string | null;
+          retry_count?: number;
+          max_retries?: number;
+          next_attempt_at?: string;
+          dead_letter?: boolean;
+          cancel_requested_at?: string | null;
+          budget_reservation_id?: string | null;
+          error_code?: string | null;
+          error_detail?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          created_by?: string;
+          source_kind?: TranscriptionJobSourceKind;
+          media_asset_id?: string;
+          state?: JobState;
+          priority?: number;
+          idempotency_key?: string;
+          lease_owner?: string | null;
+          lease_expires_at?: string | null;
+          heartbeat_at?: string | null;
+          retry_count?: number;
+          max_retries?: number;
+          next_attempt_at?: string;
+          dead_letter?: boolean;
+          cancel_requested_at?: string | null;
+          budget_reservation_id?: string | null;
+          error_code?: string | null;
+          error_detail?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "transcription_jobs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transcription_jobs_media_asset_id_fkey";
+            columns: ["media_asset_id"];
+            isOneToOne: false;
+            referencedRelation: "media_assets";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "transcription_jobs_budget_reservation_id_fkey";
+            columns: ["budget_reservation_id"];
+            isOneToOne: false;
+            referencedRelation: "budget_reservations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      job_steps: {
+        Row: {
+          id: string;
+          job_id: string;
+          from_state: JobState | null;
+          to_state: JobState;
+          actor: JobStepActor;
+          detail: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          job_id: string;
+          from_state?: JobState | null;
+          to_state: JobState;
+          actor: JobStepActor;
+          detail?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          job_id?: string;
+          from_state?: JobState | null;
+          to_state?: JobState;
+          actor?: JobStepActor;
+          detail?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "job_steps_job_id_fkey";
+            columns: ["job_id"];
+            isOneToOne: false;
+            referencedRelation: "transcription_jobs";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -734,6 +888,69 @@ export type Database = {
           p_reason?: string;
         };
         Returns: Database["public"]["Tables"]["budget_reservations"]["Row"];
+      };
+      reserve_free_budget_and_enqueue: {
+        Args: {
+          p_workspace_id: string;
+          p_created_by: string;
+          p_media_asset_id: string;
+          p_envelope: BudgetEnvelope;
+          p_period_start: string;
+          p_period_end: string;
+          p_identity_key: string;
+          p_estimated_cost_cents_brl: number;
+          p_idempotency_key: string;
+          p_priority?: number;
+          p_max_retries?: number;
+          p_budget_expires_in_seconds?: number;
+        };
+        Returns: Database["public"]["Tables"]["transcription_jobs"]["Row"];
+      };
+      claim_next_job: {
+        Args: {
+          p_worker_id: string;
+          p_capabilities?: string[];
+          p_lease_seconds?: number;
+        };
+        Returns: Database["public"]["Tables"]["transcription_jobs"]["Row"] | null;
+      };
+      heartbeat_job: {
+        Args: {
+          p_job_id: string;
+          p_worker_id: string;
+          p_lease_seconds?: number;
+        };
+        Returns: Database["public"]["Tables"]["transcription_jobs"]["Row"];
+      };
+      advance_job_step: {
+        Args: {
+          p_job_id: string;
+          p_worker_id: string;
+          p_to_state: JobState;
+          p_detail?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["transcription_jobs"]["Row"];
+      };
+      complete_job: {
+        Args: {
+          p_job_id: string;
+          p_worker_id: string;
+          p_model: string;
+          p_seconds_processed: number;
+          p_actual_cost_cents_brl: number;
+          p_estimated_cost_micros_usd: number;
+          p_actual_cost_micros_usd: number;
+        };
+        Returns: Database["public"]["Tables"]["transcription_jobs"]["Row"];
+      };
+      fail_job: {
+        Args: {
+          p_job_id: string;
+          p_worker_id: string;
+          p_error_code: string;
+          p_error_detail?: string | null;
+        };
+        Returns: Database["public"]["Tables"]["transcription_jobs"]["Row"];
       };
     };
     Enums: {
