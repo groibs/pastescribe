@@ -1,4 +1,6 @@
-import type { JobState, TypedSupabaseClient } from "@pastescribe/database";
+import { jobStateSchema } from "@pastescribe/contracts";
+import type { JobState } from "@pastescribe/contracts";
+import type { TypedSupabaseClient } from "@pastescribe/database";
 
 export type JobProgressStage =
   | "received"
@@ -54,6 +56,19 @@ export class JobStatusReadError extends Error {
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+const STOP_POLLING_STATES: readonly JobState[] = [
+  "awaiting_user_confirmation",
+  "completed",
+  "failed",
+  "cancelled",
+  "expired",
+];
+
+const NON_CANCELLABLE_STATES: readonly JobState[] = [
+  ...STOP_POLLING_STATES,
+  "cancel_requested",
+];
+
 export function isJobId(value: string): boolean {
   return UUID_PATTERN.test(value);
 }
@@ -83,25 +98,32 @@ export function jobStateToProgressStage(state: JobState): JobProgressStage {
   return "completed";
 }
 
+export function snapshotToProgressStage(snapshot: JobStatusSnapshot): JobProgressStage {
+  if (snapshot.job.state === "completed") {
+    return "completed";
+  }
+  if (!["failed", "cancel_requested", "cancelled", "expired"].includes(snapshot.job.state)) {
+    return jobStateToProgressStage(snapshot.job.state);
+  }
+
+  for (const step of snapshot.steps.toReversed()) {
+    const parsed = jobStateSchema.safeParse(step.toState);
+    if (
+      parsed.success &&
+      !["failed", "cancel_requested", "cancelled", "expired"].includes(parsed.data)
+    ) {
+      return jobStateToProgressStage(parsed.data);
+    }
+  }
+  return "received";
+}
+
 export function shouldPollJob(state: JobState): boolean {
-  return ![
-    "awaiting_user_confirmation",
-    "completed",
-    "failed",
-    "cancelled",
-    "expired",
-  ].includes(state);
+  return !STOP_POLLING_STATES.includes(state);
 }
 
 export function canCancelJob(state: JobState): boolean {
-  return ![
-    "awaiting_user_confirmation",
-    "completed",
-    "failed",
-    "cancel_requested",
-    "cancelled",
-    "expired",
-  ].includes(state);
+  return !NON_CANCELLABLE_STATES.includes(state);
 }
 
 export async function readJobStatus(
