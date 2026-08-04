@@ -21,10 +21,13 @@ coverage/
 supabase/.branches/
 supabase/.temp/
 
-# media and processing artifacts
-uploads/
-tmp/
-temp/
+# media and processing artifacts (root-level runtime dirs only — unanchored
+# patterns here previously shadowed real source dirs like
+# apps/web/app/api/uploads/ and apps/web/lib/uploads/)
+/uploads/
+/tmp/
+/temp/
+.local-storage/
 *.mp3
 *.mp4
 *.m4a

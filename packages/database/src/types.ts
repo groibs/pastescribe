@@ -23,6 +23,7 @@ export type BudgetEnvelope = "free_ai" | "ingestion" | "infra" | "reserve";
 export type BudgetPeriodStatus = "open" | "closed";
 export type BudgetReservationStatus = "reserved" | "captured" | "released" | "expired";
 export type UsageOrigin = "free" | "paid";
+export type MediaAssetStatus = "pending_upload" | "validated" | "rejected" | "deleted";
 export type BillingInterval = "monthly" | "yearly";
 
 export type Database = {
@@ -596,6 +597,71 @@ export type Database = {
           granted_at?: string;
         };
         Relationships: [];
+      };
+      media_assets: {
+        Row: {
+          id: string;
+          workspace_id: string;
+          created_by: string;
+          storage_key: string;
+          original_filename: string | null;
+          status: MediaAssetStatus;
+          declared_content_type: string;
+          declared_size_bytes: number;
+          actual_content_type: string | null;
+          actual_size_bytes: number | null;
+          rejection_reason: string | null;
+          expires_at: string;
+          validated_at: string | null;
+          deleted_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          workspace_id: string;
+          created_by: string;
+          storage_key: string;
+          original_filename?: string | null;
+          status?: MediaAssetStatus;
+          declared_content_type: string;
+          declared_size_bytes: number;
+          actual_content_type?: string | null;
+          actual_size_bytes?: number | null;
+          rejection_reason?: string | null;
+          expires_at: string;
+          validated_at?: string | null;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          workspace_id?: string;
+          created_by?: string;
+          storage_key?: string;
+          original_filename?: string | null;
+          status?: MediaAssetStatus;
+          declared_content_type?: string;
+          declared_size_bytes?: number;
+          actual_content_type?: string | null;
+          actual_size_bytes?: number | null;
+          rejection_reason?: string | null;
+          expires_at?: string;
+          validated_at?: string | null;
+          deleted_at?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "media_assets_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
       };
     };
     Views: Record<string, never>;

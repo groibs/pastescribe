@@ -8,6 +8,7 @@ export type {
   BudgetReservationStatus,
   UsageOrigin,
   BillingInterval,
+  MediaAssetStatus,
 } from "./types";
 
 import type { SupabaseClient } from "@supabase/supabase-js";

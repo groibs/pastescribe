@@ -31,6 +31,24 @@ describe("parseServerEnv", () => {
     });
     expect(env.AI_PROVIDER).toBe("openai");
   });
+
+  it("rejeita STORAGE_PROVIDER=s3 sem credenciais completas", () => {
+    expect(() => parseServerEnv({ STORAGE_PROVIDER: "s3" })).toThrow(
+      /S3_ENDPOINT/
+    );
+  });
+
+  it("aceita STORAGE_PROVIDER=s3 com todas as credenciais", () => {
+    const env = parseServerEnv({
+      STORAGE_PROVIDER: "s3",
+      S3_ENDPOINT: "https://example.r2.cloudflarestorage.com",
+      S3_BUCKET: "test-bucket",
+      S3_REGION: "auto",
+      S3_ACCESS_KEY_ID: "test-key-id-not-real",
+      S3_SECRET_ACCESS_KEY: "test-secret-not-real",
+    });
+    expect(env.STORAGE_PROVIDER).toBe("s3");
+  });
 });
 
 describe("feature flags", () => {
