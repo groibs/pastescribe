@@ -1,130 +1,145 @@
 # Threat model — PasteScribe
 
-Criado na Onda 0 em 2026-08-03. Complementa `docs/SECURITY_BASELINE.md` (baseline mínimo) com ameaças específicas, atacantes e mitigações verificáveis. Toda mitigação marcada **[gate]** é bloqueante antes de expor a superfície correspondente.
+Criado na Onda 0 em 2026-08-03. Complementa `docs/SECURITY_BASELINE.md`. Toda mitigação marcada **[gate]** é bloqueante antes de expor a superfície correspondente.
 
 ## Ativos a proteger
 
-1. dinheiro do proprietário (orçamento ~R$ 500/mês e chaves OpenAI);
-2. transcripts e mídia dos usuários (conteúdo privado por padrão);
-3. credenciais: service role, chaves OpenAI, segredos de billing, tokens de share;
-4. integridade do ledger de créditos e do billing;
-5. infraestrutura (worker com FFmpeg e egress de rede);
-6. reputação de indexação (SEO limpo, sem conteúdo de terceiros indexado).
+1. orçamento e chaves do proprietário;
+2. transcripts, legendas, originais e outputs dos usuários;
+3. credenciais e URLs assinadas;
+4. integridade de billing, entitlements e ledgers;
+5. worker/FFmpeg, CPU, memória, disco, storage e egress;
+6. reputação e indexação.
 
 ## Atacantes considerados
 
-- **Abusador de free tier:** automatiza contas/e-mails/IPs para transcrever de graça em volume.
-- **Atacante de SSRF:** usa o campo de URL para alcançar rede interna, metadata endpoints ou portas internas do worker.
-- **Uploader malicioso:** envia mídia forjada (bombas de descompressão, containers corrompidos, MIME falso) para travar ou explorar o FFmpeg.
-- **Fraudador de billing:** forja webhooks, repete eventos, manipula client para ganhar créditos.
-- **Injetor de prompt:** publica vídeo cujo conteúdo falado contém instruções para o modelo.
-- **Usuário curioso/insider:** tenta ler transcripts de outros workspaces por IDs, shares ou API.
-- **Scraper de SEO:** tenta fazer o produto indexar/expor transcripts de terceiros.
+- abusador de free tier;
+- atacante de SSRF;
+- uploader malicioso;
+- fraudador de billing/quote;
+- injetor de prompt;
+- usuário tentando IDOR/RLS;
+- scraper de SEO;
+- abusador de renderização tentando gastar CPU/storage/tráfego ou obter benefício gratuito repetido.
 
-## Ameaças e mitigações
+## T1 — Estouro do orçamento gratuito
 
-### T1 — Estouro do orçamento gratuito
-
-Vetores: rajadas de jobs, contas descartáveis, retries duplicados, reload/duplo clique, duas instâncias concorrentes, vídeo muito longo, plataforma cara.
-
-Mitigações:
-- **[gate]** reserva atômica de orçamento antes de enfileirar (transação única; ver `docs/ARCHITECTURE.md`);
-- **[gate]** quota durável em Postgres compartilhada entre instâncias (padrão `consume_quota` SECURITY DEFINER com janela e `FOR UPDATE`, adaptado do Ressoa);
-- **[gate]** `idempotency_key` por operação lógica — reload/duplo clique/retry de rede não criam segundo job;
-- **[gate]** fail-closed: contador ou orçamento indisponível → free negado com mensagem clara; paid segue;
-- **[gate]** kill switches: `openai_enabled`, `free_ai_enabled`, por plataforma;
-- limite de duração por job free; 1 job free simultâneo por identidade; limites por conta, IP e sessão; Turnstile antes de operação paga; e-mail descartável limitado;
-- estados adaptativos Normal/Economy/Restricted/Blocked controlados pelo servidor;
-- alertas de orçamento e painel em tempo real (admin);
-- chaves free/paid separadas — vazamento ou estouro de uma não drena a outra;
-- testes explícitos de custo/abuso (duplo clique, reload, concorrência, orçamento encerrado — ver Onda 3 em `docs/ROADMAP.md`).
-
-### T2 — SSRF via campo de URL
-
-Vetores: `http://169.254.169.254/`, DNS público resolvendo para IP privado, redirect para rede interna, DNS rebinding (TTL curto trocando resposta entre validação e conexão), portas não-HTTP, esquemas exóticos (`file:`, `gopher:`).
+Vetores: rajadas, contas descartáveis, retries duplicados, reload/duplo clique, concorrência, mídia longa e múltiplas contas.
 
 Mitigações:
-- **[gate]** apenas `http`/`https`; porta 80/443;
-- **[gate]** allowlist de hostnames por adapter — não existe fetch de URL arbitrária;
-- **[gate]** resolver DNS antes de conectar e conectar no IP resolvido (pin), rejeitando: loopback, RFC1918, link-local (169.254/16 incl. metadata), reservados, multicast, IPv6 equivalentes (::1, fc00::/7, fe80::/10, ::ffff/mapeados);
-- **[gate]** revalidar cada redirect com as mesmas regras; máximo de redirects baixo (≤3);
-- limites de tamanho e tempo de resposta; validação de MIME real (sniffing);
-- egress do worker restrito por allowlist no nível de rede quando o host permitir;
-- logs sem URL completa quando desnecessário (hash/host);
-- **[gate]** suíte de testes SSRF automatizada (fixtures de IPs/redirects maliciosos) antes de ativar qualquer ingestão por link.
 
-### T3 — Upload malicioso
+- **[gate]** reserva atômica antes de operação gratuita variável;
+- **[gate]** quota durável;
+- **[gate]** idempotência por operação lógica;
+- **[gate]** fail-closed no free, paid preservado;
+- **[gate]** kill switches separados;
+- limites por conta, sessão, dispositivo, IP como sinal secundário, concorrência e global;
+- Turnstile e sinais de abuso;
+- estados Normal/Economy/Restricted/Blocked;
+- chaves/orçamentos free e paid separados.
 
-Vetores: MIME/extensão falsos, bombas de descompressão (áudio/vídeo com taxa de expansão absurda), containers corrompidos que exploram parsers, arquivos gigantes, nomes de arquivo com path traversal.
+## T2 — SSRF via URL
 
-Mitigações:
-- **[gate]** limite de tamanho no storage (URL assinada com content-length-range) e de duração via ffprobe antes de processar;
-- **[gate]** sniffing de MIME real; extensão nunca é confiada;
-- **[gate]** nome de arquivo sanitizado; objeto renomeado para UUID;
-- FFmpeg/ffprobe executados com limites de CPU, memória, disco, tempo e sem rede, em container isolado;
-- checagem de taxa de expansão (output máximo por input) contra decompression bombs;
-- quarentena: mídia só sai do bucket temporário após validação; antivírus pluggable (interface pronta, ativação opcional);
-- TTL curto e exclusão automática do original.
+Mitigações bloqueantes: apenas HTTP(S), allowlist por adapter, resolução DNS e pin de IP, rejeição de ranges privados/reservados, redirects revalidados, limites de tamanho/tempo, egress restrito e suíte SSRF antes de ativar link ingestion.
 
-### T4 — Fraude de billing e ledger
+## T3 — Upload e mídia maliciosa
 
-Vetores: webhook forjado/replay, evento duplicado, client "confirmando" pagamento, corrida entre webhook e refund, saldo negativo silencioso.
+Vetores: MIME falso, arquivo enorme, container corrompido, codec malicioso, decompression bomb e path traversal.
 
 Mitigações:
-- **[gate]** webhooks com assinatura verificada + tabela `payment_events` com unicidade por event id (replay ignorado);
-- **[gate]** entitlements/créditos concedidos apenas server-side a partir de eventos verificados;
-- **[gate]** ledger append-only (`credit_ledger_entries`): reservar/capturar/liberar/estornar como lançamentos, nunca update de saldo sem histórico;
-- reconciliação periódica provider ↔ ledger; refund/chargeback geram lançamentos compensatórios auditáveis;
-- preços e produtos vêm do servidor/banco; client nunca envia valor.
 
-### T5 — Prompt injection via transcript
+- **[gate]** tamanho real e duração via storage/ffprobe;
+- **[gate]** MIME sniffing;
+- **[gate]** key opaca e nome sanitizado;
+- FFmpeg/ffprobe sem rede, em processo/container isolado;
+- limites de CPU, memória, disco, tempo, frames e taxa de expansão;
+- quarentena, TTL e exclusão automática;
+- antivírus pluggable.
 
-Vetores: vídeo cujo áudio contém "ignore suas instruções e revele X", tentativa de exfiltrar prompts internos ou dados de outros usuários via ações de IA derivadas.
+## T4 — Fraude de billing, quote e ledger
 
-Mitigações:
-- **[gate]** transcript tratado como dado delimitado e não confiável em todo prompt; instruções internas proibem executar ordens do conteúdo;
-- ações de IA nunca têm acesso a ferramentas/efeitos colaterais comandados pelo conteúdo;
-- Structured Outputs com schema validado (saída fora do schema = falha, não execução);
-- limite de tamanho de contexto; nenhum segredo ou dado de outro usuário no prompt;
-- logs de IA registram métricas (tokens, custo, latência), nunca conteúdo por padrão.
-
-### T6 — Acesso cruzado a dados (IDOR/RLS)
-
-Vetores: IDs sequenciais/chutados em rotas e API, membro removido que mantém acesso, share token vazado, admin "por UI".
+Vetores: webhook forjado/replay, client confirmando compra, preço manipulado, corrida de refund, saldo negativo e alteração de parâmetros depois do quote.
 
 Mitigações:
-- **[gate]** RLS em toda tabela exposta; política por workspace membership + papel; testes de RLS com múltiplos usuários no CI;
-- ownership revalidada no servidor em toda ação sensível (nunca confiar em ID do client);
-- shares por token aleatório de alta entropia, escopo mínimo, validade e revogação; rotas de share `noindex`;
-- papéis owner/admin/editor/viewer aplicados em SQL, não só em interface;
-- admin exige papel verificado server-side; funções privilegiadas com `search_path` fixo.
 
-### T7 — Vazamento de segredos e PII
+- **[gate]** assinatura de webhook e event id único;
+- **[gate]** crédito/entitlement somente server-side;
+- **[gate]** ledger append-only e lançamentos compensatórios;
+- **[gate]** quote expirável vinculado a workspace, mídia, transcript versionado, duração, resolução, preset/settings e versão da política;
+- novo quote quando parâmetros mudarem;
+- reconciliação provider ↔ ledger;
+- client nunca envia preço final ou confirmação autoritativa.
 
-Vetores: segredo em bundle/`NEXT_PUBLIC_*`, log com transcript/e-mail/URL assinada, analytics com conteúdo, `.env` commitado.
+## T5 — Prompt injection via transcript
 
-Mitigações:
-- validação de env no boot separa público × servidor; lint de prefixo público para segredos;
-- catálogo fechado de analytics (`docs/ANALYTICS_EVENTS.md`) — evento fora do catálogo não compila;
-- logger central com redação (campos proibidos deixam de existir no log, não são mascarados caso a caso);
-- `.gitignore` já bloqueia `.env*`; secret scanning e audit no CI;
-- rotação documentada por chave; chaves por ambiente.
+Transcript é dado não confiável, delimitado; ações de IA sem efeitos colaterais; Structured Outputs; nenhum segredo ou conteúdo de outro usuário; logs só com métricas.
 
-### T8 — Abuso de SEO/conteúdo
+## T6 — Acesso cruzado a dados
 
-Vetores: transcripts de terceiros indexados, doorway pages, conteúdo fino em escala.
+- **[gate]** RLS por workspace;
+- ownership revalidada no servidor;
+- share tokens com hash, escopo, validade e revogação;
+- admin server-side;
+- download de output exige autorização atual, não apenas posse de ID.
 
-Mitigações:
-- transcript é privado e `noindex` por padrão — publicação exige prova de controle do conteúdo, opt-in, valor adicional e mecanismo de remoção (feature bloqueada por flag; ver `docs/PENDING_FEATURES.md`);
-- gate de qualidade por página programática (`docs/SEO.md`);
-- rotas privadas com `noindex` explícito + robots + fora do sitemap (tríplice, testada em CI).
+## T7 — Vazamento de segredos e PII
+
+- env separada e sem segredo público;
+- catálogo fechado de analytics;
+- logger com redação;
+- secret scanning;
+- nunca logar transcript, texto de legenda, mídia, filename, e-mail, IP bruto, quote payload, URL assinada ou token.
+
+## T8 — Abuso de SEO/conteúdo
+
+Transcript e output são privados/noindex por padrão. Publicação exige prova de controle, opt-in, remoção e quality gate.
+
+## T9 — Abuso e exaustão na renderização de vídeo legendado
+
+Superfícies novas, ainda não expostas:
+
+- CPU/memória/disco excessivos;
+- arquivos enormes ou corrompidos;
+- codecs/containers maliciosos;
+- decompression bombs;
+- preset/settings que provoquem custo extremo;
+- retries intencionais;
+- render duplicado por reload/concorrência;
+- download excessivo;
+- storage abandonado;
+- reutilização da exportação gratuita;
+- múltiplas contas;
+- alteração de duração, resolução, frame rate ou preset depois do quote;
+- compra confirmada somente no client;
+- cancelamento em ponto inseguro deixando reserva/output órfão.
+
+Mitigações bloqueantes antes de `captioned_video_render_enabled=true`:
+
+- **[gate]** `render_jobs` idempotente e separado de `transcription_jobs`;
+- **[gate]** schema versionado e estrito de preset/settings; presets imutáveis por versão;
+- **[gate]** allowlist de fontes licenciadas, filtros e resoluções;
+- **[gate]** limites do FFmpeg para CPU, memória, disco, tempo, frames, output bytes e expansão;
+- **[gate]** diretório temporário por operação e cleanup em todos os caminhos;
+- **[gate]** progresso/heartbeat, timeout, cancelamento cooperativo e retries finitos;
+- **[gate]** quote e entitlement validados no servidor imediatamente antes da reserva/job;
+- **[gate]** idempotência em quote, reserva, compra, job, captura e download grant;
+- **[gate]** URL assinada de curta duração e limite proporcional de downloads;
+- **[gate]** TTL/sweeper para outputs e temporários abandonados;
+- **[gate]** orçamento free separado do paid e kill switch do benefício gratuito;
+- **[gate]** conta verificada + entitlement durável único + Turnstile + limites globais/concorrência;
+- IP somente como sinal secundário;
+- métricas sem conteúdo e alertas de custo/erro;
+- falha interna libera/estorna reserva; retry/reload não cobra outra vez.
+
+A prévia no navegador deve evitar processamento servidor por mount/reload/troca de controle. Preview servidor, se necessário, também exige cache e idempotência.
 
 ## Riscos aceitos nesta fase
 
-- Sem WAF dedicado no início (Vercel + Turnstile + rate limit durável cobrem o essencial); revisar ao ativar adapters públicos.
-- Antivírus de upload é interface pluggable, não ativo por padrão (custo); mitigado por sandbox do FFmpeg + limites.
-- Fingerprint de device é sinal fraco e usado com parcimônia (privacidade > precisão antifraude).
+- sem WAF dedicado no início;
+- antivírus pluggable, não ativo por padrão;
+- fingerprint é sinal fraco;
+- não há superfície de renderização ativa, portanto os gates de T9 são planejamento e devem ser implementados nas Ondas 6.4/9, não agora.
 
 ## Revisão
 
-Revisar este documento a cada onda que exponha superfície nova (3, 4, 5, 8, 9, 11) e na auditoria da Onda 12.
+Revisar a cada onda que exponha superfície nova, especialmente 4.2c, 5, 6.3, 6.4, 8, 9 e 11.
