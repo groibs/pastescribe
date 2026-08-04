@@ -1,143 +1,123 @@
 # Roadmap — plano em ondas e fatias verticais mergeáveis
 
-Criado na Onda 0 em 2026-08-03. Ordem de dependências obrigatória (prompt-mestre §25). Cada fatia deixa o repositório estável, testável e mergeável; nenhuma abre frente que não fecha.
+Criado na Onda 0 em 2026-08-03. Cada fatia deixa o repositório testável e mergeável.
 
 Legenda: ✅ concluída · 🔄 em andamento · ⬜ pendente
 
-## Onda 0 — Descoberta e governança 🔄
+## Ondas 0–3 — fundação ✅/🔄
 
-Inventário, auditoria do Stitch, pesquisa (repos do dono + comunidade + docs oficiais), arquitetura, threat model, modelo de dados, estratégia de RLS/jobs/upload/SSRF, governança de custo, SEO, design system, skills locais, este plano.
+- Onda 0: governança e documentos canônicos.
+- Onda 1: monorepo, web, design system e observabilidade base.
+- Onda 2: Auth, workspaces e RLS.
+- Onda 3: ledger, orçamento, quota e admin; Turnstile/rate limits continuam pendentes antes da abertura pública do free.
 
-**Critério de aceite:** documentos canônicos reais criados; skills operacionais; decisões registradas; handoff atualizado; PR mergeável.
+## Onda 4 — Upload e pipeline local
 
-## Onda 1 — Fundação do monorepo
-
-| Fatia | Conteúdo | Aceite |
-|---|---|---|
-| 1.1 Workspace + web mínima | pnpm workspaces + Turborepo; `apps/web` Next.js 16 (TS estrito, Tailwind 4, App Router) com i18n en/pt-br/es e páginas honestas mínimas; `packages/config`; `packages/contracts`; `packages/i18n`; CI; `.env.example` | lint, typecheck, test e build verdes; app roda sem credenciais |
-| 1.2 Design tokens + `packages/ui` base | tokens, Button, Input, URLInput, Badge, Alert, Skeleton com estados + testes + axe | checks verdes e axe sem violações |
-| 1.3 Observabilidade base | `packages/observability`, logger estruturado com redação, request-id, healthcheck | log sem campos proibidos |
-
-## Onda 2 — Auth, workspaces e RLS
-
-2.1 Supabase local + migration inicial (profiles, workspaces, members, invites, feature_flags, app_settings) + RLS + testes. 2.2 Auth SSR. 2.3 Dashboard autenticado mínimo + admin base.
-
-**Gate:** testes RLS A/B; nenhum acesso cruzado; service role fora do bundle.
-
-## Onda 3 — Billing, ledger, quota e governador de custo
-
-3.1 Migrations de planos, créditos, uso, orçamento e quota. 3.2 testes de custo/abuso. 3.3 provider fake/webhook idempotente/admin. 3.4 Turnstile + rate limits.
-
-**Gate:** cenários bloqueantes de custo e abuso passando antes de OpenAI ou pagamento real.
-
-## Onda 4 — Upload e pipeline local (sem OpenAI real)
-
-### 4.1 — Storage e upload
+### 4.1 — Storage e upload ✅
 
 StoragePort local/S3-compatible, upload assinado, quarentena, limites e MIME sniffing.
 
-### 4.2a — Fila de transcrição
+### 4.2a — Fila de transcrição ✅
 
-`transcription_jobs`, claim, heartbeat, transições, complete/fail, retries e idempotência.
+`transcription_jobs`, claim, heartbeat, transições, retry, complete/fail e idempotência.
 
-### 4.2b — Enfileiramento pós-upload
+### 4.2b — Enfileiramento pós-upload ✅
 
-Upload validado cria `transcription_job` real, protegido por quota de enqueue.
+Upload validado cria job real, protegido por quota de enqueue.
 
-### 4.2c — Worker Python + FFmpeg + provider fake
+### 4.2c-a — Fundação Python/FFmpeg ✅
 
-Implementar o ciclo `claim_next_job` → adquirir mídia → `ffprobe` → reservar orçamento → pipeline fake → `complete_job`/`fail_job`.
+Runner testável, limites, cleanup, provider fake, container non-root, telemetria e CI Python.
 
-Além do aceite principal, o worker deve nascer compatível com renderização posterior, sem implementar o recurso completo:
+### 4.2c-b — Adapters Supabase/R2/custo ✅
 
-- runner/porta de FFmpeg testável;
-- progresso, heartbeat, timeout, cancelamento cooperativo e cleanup;
-- limites de CPU, memória, disco, duração e bytes;
-- telemetria comum de mídia: operação, duração, wall time, tentativas, bytes, codec, frame rate e resolução;
-- storage temporário capaz de receber futuros outputs;
-- fixture simples de inserção de legenda somente se não ampliar materialmente a fatia.
+Ports estreitas, PostgREST/RPC, storage local/S3 por streaming, estimativa e configuração fail-closed.
 
-Não entram aqui: editor de legendas, `render_jobs`, checkout, billing de renderização ou exportação MP4 para usuário.
+### 4.2c-c — Transcript persistido e ciclo completo 🔄
 
-### 4.3 — UI de processamento
+- `transcripts` e `transcript_segments` privados;
+- persistência idempotente;
+- conclusão atômica com captura de orçamento;
+- cancelamento com liberação de reserva;
+- polling, heartbeat e orquestrador;
+- ciclo fake completo;
+- pgTAP, testes Python, lint, typecheck, build e Vercel como gate.
 
-Etapas reais, `aria-live`, cancelamento, transcript fixture e primeira RLS de leitura de jobs por workspace.
+Não entram: OpenAI real, host de produção, `render_jobs`, editor ou checkout.
 
-**Gate:** upload → job → worker fake → transcript de ponta a ponta; cleanup; idempotência; cancelamento; timeout. As obrigações arquiteturais de mídia em `docs/CAPTIONED_VIDEO_EXPORT.md` precisam estar refletidas no desenho do worker.
+### 4.3a — Leitura segura e UI de processamento ⬜
 
-## Onda 5 — OpenAI real
+- policies SELECT por workspace para jobs, steps e transcripts;
+- testes RLS usuário A/B;
+- página autenticada de status;
+- etapas reais, `aria-live` e polling sem custo;
+- cancelamento server-side;
+- transcript fake somente leitura;
+- estados `awaiting_user_confirmation`, retry, error, cancelled e completed.
 
-Transcrição real atrás de flags, chaves free/paid separadas, chunking, timestamps, diarização opcional, telemetria de custo, retries finitos e kill switches.
+### 4.3b — Fechar fluxo web local ⬜
 
-## Onda 6 — Editor e exports
+Conectar upload UI → job → status → transcript, estados de retomada e testes de acessibilidade. Editor avançado permanece na Onda 6.
 
-### 6.1 — Editor de transcrição e player sincronizado
+**Gate da Onda 4:** upload → enqueue → worker fake → transcript persistido → UI, com cleanup, idempotência, cancelamento e timeout.
 
-Segmentos editáveis e versionados, speakers, busca/substituição, autosave, atalhos e mobile.
+## Onda 5 — OpenAI real ⬜
 
-### 6.2 — Exports de texto e arquivos de legenda
+Transcrição real atrás de flags, chaves free/paid separadas, chunking, timestamps, diarização opcional, telemetria, retries e kill switches.
 
-TXT, Markdown, DOCX, PDF, SRT, VTT e JSON, com opções validadas e outputs temporários.
+## Onda 6 — Editor e exports ⬜
+
+### 6.1 — Editor e player sincronizado
+
+Segmentos editáveis/versionados, speakers, busca/substituição, autosave, atalhos e mobile.
+
+### 6.2 — Exports de texto/legenda
+
+TXT, Markdown, DOCX, PDF, SRT, VTT e JSON.
 
 ### 6.3 — Prévia de legenda no vídeo
 
-Módulo visualmente secundário abaixo da transcrição; overlay no navegador; até aproximadamente 15 segundos; timestamps reais; presets, fontes, cores, posição e reset; mobile, acessibilidade, cache/idempotência e analytics sem PII. Não criar timeline ou editor avançado.
+Módulo secundário; overlay no navegador; até ~15 s; timestamps reais; presets/fontes/cores/posição; acessibilidade e analytics sem PII.
 
-### 6.4 — Renderização do vídeo completo
+### 6.4 — Renderização completa
 
-Criar o domínio real de renderização somente aqui: `render_jobs` separado de `transcription_jobs`, presets/settings versionados, FFmpeg, MP4, áudio preservado, 720p/1080p conforme entitlement, progresso, cancelamento seguro, retry finito, reserva/reconciliação de custo, provider fake/entitlement de teste, URL assinada, TTL, cleanup e feature flags.
+`render_jobs` separado, presets/settings versionados, FFmpeg, MP4, áudio, 720p/1080p, progresso, cancelamento, retry, custo, provider fake/entitlement, URL assinada, TTL e flags. Primeira migration exige revisão explícita.
 
-A renderização paga permanece desligada até os gates da Onda 9. Schema significativo exige revisão explícita antes da migration.
+## Onda 7 — Inteligência derivada ⬜
 
-## Onda 7 — Inteligência derivada
+Resumo, capítulos, citações, tradução e formatos via prompts/outputs versionados.
 
-Prompts versionados + Structured Outputs; resumo, capítulos, citações, tradução, formatos; quotas, caching e artefatos versionados.
+## Onda 8 — Link adapters ⬜
 
-## Onda 8 — Link adapters
+Adapters por plataforma, SSRF, metadados, legendas nativas e fallback upload.
 
-Interface de adapter + suíte SSRF completa + metadados + legendas nativas; fontes verificadas; fallback upload; admin de saúde por plataforma.
+## Onda 9 — Monetização completa ⬜
 
-## Onda 9 — Monetização completa
+- 9.1 billing real em test mode, webhooks, refunds/chargebacks/reconciliação;
+- 9.2 transcrição avulsa, pacotes, planos e retomada;
+- 9.3 quote/compra avulsa de vídeo legendado;
+- 9.4 pacotes, planos e benefício gratuito de renderização;
+- 9.5 analytics/experimentos e decisão de unidade comercial.
 
-### 9.1 — Fundação de billing real
+## Onda 10 — Site público e SEO ⬜
 
-Provider em test mode, checkout server-side, webhooks idempotentes, invoices, refunds, chargebacks e reconciliação.
+Homepage, features, pricing, ferramentas, conteúdo e SEO. Vídeo legendado entra de forma secundária, sem alterar **Paste any video. Get useful text.**
 
-### 9.2 — Monetização da transcrição
-
-Conclusão avulsa, pacotes de créditos, assinaturas e retomada de job após pagamento.
-
-### 9.3 — Quote e compra avulsa de vídeo legendado
-
-Quote autoritativo no servidor baseado em duração, resolução, codec, frame rate, complexidade, processamento, storage, egress, retries, gateway, impostos e reserva operacional; política configurável sem valores finais hardcoded; compra/captura somente server-side; retomada idempotente do render.
-
-### 9.4 — Pacotes, planos e benefício gratuito de renderização
-
-Pacotes de minutos, franquia de plano, 1080p, presets extras, prioridade e lote nos planos adequados. Primeira exportação gratuita: uma vez por conta verificada, até 2 minutos, 720p, presets limitados, sujeita a entitlement durável, Turnstile, orçamento global, estados Normal/Economy/Restricted/Blocked, concorrência e sinais de abuso. IP é sinal secundário, nunca identidade única.
-
-### 9.5 — Analytics e experimentos comerciais
-
-Funil de preview → quote → checkout → compra → render → download; experimentos de preço sem deploy; comparação explícita entre minutos separados, créditos únicos e modelo combinado antes da decisão final.
-
-## Onda 10 — Site público e SEO
-
-Homepage, features, pricing, API, soluções, ferramentas, páginas de plataforma/resultado, blog/help, sitemaps/hreflang/schema e Lighthouse CI.
-
-A funcionalidade de vídeo legendado entra de forma secundária em features, pricing, FAQ, páginas de legendas/exports e ferramentas relevantes. Não alterar a tese principal da homepage e não usar “pronto para publicar”. Copy aceitável:
+Copy aceitável:
 
 > Exporte como texto, SRT, VTT ou vídeo com as legendas inseridas.
 
-## Onda 11 — Equipes, compartilhamento, integrações e API pública
+## Onda 11 — Equipes, integrações e API ⬜
 
-Shares, teams/roles, API keys, `/api/v1`, webhooks e integrações. Exposição pública de renderização só depois de o domínio e billing estarem estáveis.
+Shares, teams/roles, API keys, `/api/v1`, webhooks e integrações.
 
-## Onda 12 — Hardening e lançamento
+## Onda 12 — Hardening e lançamento ⬜
 
-Auditorias de segurança, acessibilidade, SEO, custo/abuso e carga; visual regression; runbook; launch checklist; staging.
+Segurança, acessibilidade, SEO, custo/abuso, carga, visual regression, runbook, staging e checklist.
 
 ## Regras transversais
 
-- Uma onda pode começar antes da anterior estar 100% somente quando a dependência real já estiver entregue.
-- Toda fatia: typecheck, lint, testes, build, docs e HANDOFF atualizados; PR independente.
-- OpenAI real, pagamentos reais, adapters públicos, DNS/produção e migrations significativas de renderização exigem gates e autorização/revisão explícita.
-- Exportação de vídeo legendado é P1 comercial; somente suas incompatibilidades arquiteturais são P0 durante a Onda 4.
+- dependência real entregue antes da próxima fatia;
+- toda PR: lint, typecheck, testes, build, docs e handoff;
+- OpenAI, pagamentos, adapters públicos, DNS/produção e render schema exigem gates explícitos;
+- vídeo legendado é P1 comercial; somente compatibilidade arquitetural é P0 na Onda 4.
