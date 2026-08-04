@@ -5,7 +5,13 @@ from typing import Final, cast
 
 import httpx
 
-from .models import CostEstimate, JobState, MediaAsset, TranscriptionJob
+from .models import (
+    CostEstimate,
+    JobState,
+    MediaAsset,
+    TranscriptFixture,
+    TranscriptionJob,
+)
 
 JsonObject = dict[str, object]
 
@@ -87,6 +93,18 @@ def _parse_media_asset(value: object) -> MediaAsset:
         size_bytes=_optional_int(payload, "actual_size_bytes"),
         content_type=_optional_str(payload, "actual_content_type"),
     )
+
+
+def _segments_payload(transcript: TranscriptFixture) -> list[JsonObject]:
+    return [
+        {
+            "start_ms": segment.start_ms,
+            "end_ms": segment.end_ms,
+            "text": segment.text,
+            "speaker_label": segment.speaker_label,
+        }
+        for segment in transcript.segments
+    ]
 
 
 class SupabaseJobRepository:
@@ -219,24 +237,43 @@ class SupabaseJobRepository:
         )
         return _parse_job(value)
 
-    async def complete_job(
+    async def complete_transcription_job(
         self,
         job_id: str,
-        model: str,
+        transcript: TranscriptFixture,
         estimate: CostEstimate,
         actual_cost_micros_usd: int = 0,
         actual_cost_cents_brl: int = 0,
     ) -> TranscriptionJob:
         value = await self._rpc(
-            "complete_job",
+            "complete_transcription_job",
             {
                 "p_job_id": job_id,
                 "p_worker_id": self.worker_id,
-                "p_model": model,
+                "p_language": transcript.language,
+                "p_source": "ai",
+                "p_model": transcript.model,
+                "p_text": transcript.text,
+                "p_segments": _segments_payload(transcript),
                 "p_seconds_processed": estimate.duration_seconds,
                 "p_actual_cost_cents_brl": actual_cost_cents_brl,
                 "p_estimated_cost_micros_usd": estimate.estimated_cost_micros_usd,
                 "p_actual_cost_micros_usd": actual_cost_micros_usd,
+            },
+        )
+        return _parse_job(value)
+
+    async def cancel_job(
+        self,
+        job_id: str,
+        detail: str | None = None,
+    ) -> TranscriptionJob:
+        value = await self._rpc(
+            "cancel_job",
+            {
+                "p_job_id": job_id,
+                "p_worker_id": self.worker_id,
+                "p_detail": detail,
             },
         )
         return _parse_job(value)
