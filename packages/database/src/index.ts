@@ -9,6 +9,9 @@ export type {
   UsageOrigin,
   BillingInterval,
   MediaAssetStatus,
+  TranscriptionJobSourceKind,
+  JobStepActor,
+  JobState,
 } from "./types";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
