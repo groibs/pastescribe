@@ -19,6 +19,14 @@ export type { SkeletonProps } from "./Skeleton";
 export { TranscribeBar } from "./TranscribeBar";
 export type { TranscribeBarProps } from "./TranscribeBar";
 
+export { ProgressSteps } from "./ProgressSteps";
+export type {
+  ProgressStep,
+  ProgressStepStateLabels,
+  ProgressStepsProps,
+  ProgressStepsStatus,
+} from "./ProgressSteps";
+
 export { Logomark } from "./Logomark";
 
 export { cx } from "./cx";

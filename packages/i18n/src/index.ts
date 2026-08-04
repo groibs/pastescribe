@@ -48,4 +48,6 @@ export function getDictionary(locale: Locale): Dictionary {
   return DICTIONARIES[locale];
 }
 
+export { getProcessingCopy } from "./job-status";
+export type { ProcessingCopy } from "./job-status";
 export type { Dictionary };

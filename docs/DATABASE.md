@@ -4,7 +4,7 @@ Criado na Onda 0 em 2026-08-03. O estado real é sempre o das migrations em `sup
 
 ## Estado entregue
 
-Após esta fatia, migrations `0001`–`0015` existem e são testadas no CI. Nenhuma foi aplicada ao Supabase real do dono.
+Após esta fatia, migrations `0001`–`0016` existem e são testadas no CI. Nenhuma foi aplicada ao Supabase real do dono.
 
 Entregue:
 
@@ -14,11 +14,11 @@ Entregue:
 - `media_assets` (`0007`);
 - `transcription_jobs`, `job_steps` e fila (`0008`–`0012`);
 - `transcripts` e `transcript_segments` (`0013`–`0014`);
-- persistência/conclusão/cancelamento do worker (`0015`).
+- persistência/conclusão/cancelamento do worker (`0015`);
+- policies de leitura por workspace para jobs/steps/transcripts/segmentos (`0016`).
 
 Não entregue:
 
-- policies de leitura de jobs/transcripts para usuários — Onda 4.3;
 - OpenAI real — Onda 5;
 - editor/versionamento/exportações — Onda 6;
 - billing completo — Onda 9;
@@ -67,11 +67,11 @@ Fila específica de transcrição:
 - duração real descoberta pelo worker;
 - erros sem conteúdo sensível.
 
-`source_kind=url` continua apenas estrutural.
+`source_kind=url` continua apenas estrutural. RLS de leitura por workspace (`viewer+`) entregue na `0016`; escrita continua exclusiva das funções `SECURITY DEFINER`.
 
 ### `job_steps`
 
-Histórico append-only das transições. `job_attempts` continua adiado até existir necessidade real além de steps + retry count.
+Histórico append-only das transições. `job_attempts` continua adiado até existir necessidade real além de steps + retry count. Mesma RLS de leitura por workspace da `0016` (join por `job_id`).
 
 ## Transcript entregue
 
@@ -97,7 +97,7 @@ Segmentos ordenados:
 - speaker label opcional;
 - timestamps.
 
-RLS está habilitada sem policy de client. A primeira leitura por workspace entra na Onda 4.3, junto com UI/testes A/B.
+RLS entregue na Onda 4.3a (`0016`): `authenticated` com `viewer+` no workspace lê `transcripts`/`transcript_segments` (join por `transcript_id`); sem INSERT/UPDATE/DELETE direto — resultado só é escrito por `persist_transcript_result()`/`complete_transcription_job()`.
 
 ## Funções SQL atômicas
 
@@ -191,4 +191,4 @@ Settings deverão usar schema estrito/versionado; JSON arbitrário é proibido. 
 
 ## Próximas migrations
 
-A Onda 4.3 pode adicionar apenas policies de leitura e contratos de consulta/cancelamento necessários à UI. Nenhum schema de renderização entra antes da 6.4 e de revisão explícita.
+Onda 4.3a entregou as policies de leitura (`0016`). Próximas fatias de 4.3 podem adicionar apenas o que a UI exigir de fato (sem antecipar schema). Nenhum schema de renderização entra antes da 6.4 e de revisão explícita.

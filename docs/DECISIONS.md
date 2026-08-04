@@ -77,8 +77,8 @@ Este arquivo consolida as decisões ativas. Código e migrations vencem em caso 
 
 ### `transcription_jobs` específico
 
-- **Status:** ativa.
-- **Decisão:** fila específica da transcrição. RLS de client só entra junto com o primeiro consumidor real na UI 4.3.
+- **Status:** ativa; RLS de leitura entregue.
+- **Decisão:** fila específica da transcrição. RLS de client entrou junto com o primeiro consumidor real (UI 4.3a, migration `0016`): `viewer+` do workspace lê `transcription_jobs`/`job_steps`/`transcripts`/`transcript_segments`; nenhuma escrita direta.
 
 ### Enqueue separado da reserva
 
@@ -138,6 +138,12 @@ Este arquivo consolida as decisões ativas. Código e migrations vencem em caso 
 - **Status:** risco aceito temporariamente.
 - **Decisão:** sweeper automático espera scheduler real. Worker morto pode exigir intervenção até essa fatia.
 
+### 2026-08-04 — Onda 4.3a: UI de status/cancelamento antes do editor
+
+- **Status:** entregue.
+- **Decisão:** primeira tela autenticada sobre o pipeline real (`/{locale}/app/jobs/{id}`) é somente leitura + cancelamento — sem edição, autosave ou exportação (isso é Onda 6). Status via polling de banco (`GET /api/jobs/[id]`, `no-store`) — nenhuma chamada paga entra nesse caminho. Cancelamento (`POST /api/jobs/[id]/cancel`) confirma ownership com o client RLS-scoped do usuário antes de elevar para `service_role` e chamar `request_job_cancel`; mesma origem exigida (defesa contra CSRF num POST autenticado por cookie).
+- **Consequência:** `error_detail` (pode conter mensagem crua de exceção Postgres) nunca é exposto na resposta — só `error_code` (enum estável). `ProgressSteps` comunica estado por texto/`aria-current`/ícone, nunca só por cor; região `aria-live="polite"` anuncia mudança de estado pra leitor de tela.
+
 ## Vídeo com legendas inseridas
 
 ### Prioridade e posicionamento
@@ -173,7 +179,7 @@ Este arquivo consolida as decisões ativas. Código e migrations vencem em caso 
 
 ## Próximo passo
 
-Onda 4.3a: policies SELECT mínimas por workspace, UI de progresso/cancelamento e transcript fake somente leitura.
+Onda 4.3a entregue (policies SELECT por workspace, UI de progresso/cancelamento, transcript somente leitura). Próximo: 4.3b (upload UI ligada ao status/transcript, fechando o fluxo local sem OpenAI real) ou retomar a decisão de host do worker para o primeiro deploy real.
 
 ## A confirmar
 
