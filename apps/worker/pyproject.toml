@@ -1,0 +1,50 @@
+[project]
+name = "pastescribe-worker"
+version = "0.1.0"
+description = "Media worker for PasteScribe"
+requires-python = ">=3.11"
+dependencies = [
+  "boto3>=1.43,<2",
+  "fastapi>=0.139,<1",
+  "httpx>=0.28,<1",
+  "uvicorn>=0.51,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "mypy>=1.18,<2",
+  "pytest>=9,<10",
+  "ruff>=0.15,<1",
+]
+
+[project.scripts]
+pastescribe-worker = "pastescribe_worker.cli:main"
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pastescribe_worker"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+show_error_codes = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "botocore.*"]
+ignore_missing_imports = true
