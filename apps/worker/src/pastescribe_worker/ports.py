@@ -65,13 +65,19 @@ class JobRepository(Protocol):
         detail: str | None = None,
     ) -> TranscriptionJob: ...
 
-    async def complete_job(
+    async def complete_transcription_job(
         self,
         job_id: str,
-        model: str,
+        transcript: TranscriptFixture,
         estimate: CostEstimate,
         actual_cost_micros_usd: int = 0,
         actual_cost_cents_brl: int = 0,
+    ) -> TranscriptionJob: ...
+
+    async def cancel_job(
+        self,
+        job_id: str,
+        detail: str | None = None,
     ) -> TranscriptionJob: ...
 
     async def fail_job(
