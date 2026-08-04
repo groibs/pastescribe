@@ -6,7 +6,12 @@ from datetime import date
 
 import httpx
 
-from pastescribe_worker.models import CostEstimate, JobState
+from pastescribe_worker.models import (
+    CostEstimate,
+    JobState,
+    TranscriptFixture,
+    TranscriptSegment,
+)
 from pastescribe_worker.supabase import SupabaseJobRepository
 
 
@@ -95,6 +100,64 @@ def test_claim_asset_and_budget_rpc_contracts() -> None:
     assert isinstance(reserve_payload, dict)
     assert reserve_payload["p_estimated_cost_cents_brl"] == 5
     assert reserve_payload["p_idempotency_key"] == "transcription-budget:job-1"
+
+
+def test_atomic_completion_and_cancellation_rpc_contracts() -> None:
+    requests: list[tuple[str, object]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        payload = json.loads(request.content) if request.content else None
+        requests.append((request.url.path, payload))
+        if request.url.path.endswith("/rpc/complete_transcription_job"):
+            return httpx.Response(200, json=_job_payload("completed"))
+        if request.url.path.endswith("/rpc/cancel_job"):
+            return httpx.Response(200, json=_job_payload("cancelled"))
+        raise AssertionError(f"unexpected request: {request.url}")
+
+    async def scenario() -> None:
+        client = httpx.AsyncClient(
+            base_url="https://project.supabase.co/rest/v1/",
+            transport=httpx.MockTransport(handler),
+        )
+        repository = SupabaseJobRepository(
+            "https://project.supabase.co",
+            "service-role",
+            "worker-1",
+            300,
+            client=client,
+        )
+        transcript = TranscriptFixture(
+            language="pt-br",
+            model="fake-transcriber-v1",
+            text="Bloco único.",
+            segments=(TranscriptSegment(0, 0, 1000, "Bloco único.", "Speaker 1"),),
+        )
+        completed = await repository.complete_transcription_job(
+            "job-1",
+            transcript,
+            CostEstimate(60, 3000, 4500, 3),
+        )
+        assert completed.state is JobState.COMPLETED
+        cancelled = await repository.cancel_job("job-1", "cancelamento confirmado")
+        assert cancelled.state is JobState.CANCELLED
+        await client.aclose()
+
+    asyncio.run(scenario())
+    completion_payload = requests[0][1]
+    assert isinstance(completion_payload, dict)
+    assert completion_payload["p_source"] == "ai"
+    assert completion_payload["p_text"] == "Bloco único."
+    assert completion_payload["p_segments"] == [
+        {
+            "start_ms": 0,
+            "end_ms": 1000,
+            "text": "Bloco único.",
+            "speaker_label": "Speaker 1",
+        }
+    ]
+    cancel_payload = requests[1][1]
+    assert isinstance(cancel_payload, dict)
+    assert cancel_payload["p_worker_id"] == "worker-1"
 
 
 def test_rpc_failure_is_reduced_to_stable_error_code() -> None:
