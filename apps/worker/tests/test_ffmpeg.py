@@ -44,7 +44,10 @@ async def _create_sample(runner: FfmpegRunner, output: Path) -> None:
     )
 
 
-@pytest.mark.skipif(not shutil.which("ffmpeg") or not shutil.which("ffprobe"), reason="ffmpeg missing")
+@pytest.mark.skipif(
+    not shutil.which("ffmpeg") or not shutil.which("ffprobe"),
+    reason="ffmpeg missing",
+)
 def test_probe_and_caption_fixture(tmp_path: Path) -> None:
     async def scenario() -> None:
         runner = FfmpegRunner(_config(tmp_path))
