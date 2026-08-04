@@ -1,86 +1,261 @@
 # HANDOFF — PasteScribe
 
-Última atualização: **2026-08-04** (Onda 0 até fatia 3.3 + Onda 4 fatia 4.1 + Onda 4 fatia 4.2a (com correção) mergeadas; Onda 4 fatia 4.2b — enfileirar automaticamente após upload validado — completa, PR a caminho)
+Última atualização: **2026-08-04** — Onda 4 fatia 4.2b mergeada; planejamento canônico da exportação de vídeo com legendas inseridas concluído em branch separada, sem implementação do recurso.
 
 ## Branch e base
 
-- Base: `main` (PRs #2–#13 já mergeadas)
-- Branch desta entrega: `claude/pastescribe-wave-0-vqgzet`
-- Estado: Onda 4 fatia 4.2b completa — `POST /api/uploads/[id]/complete` agora enfileira um `transcription_job` de verdade depois de validar o upload. PR a caminho.
-- **Merge de PR é automático** assim que CI estiver verde (autorização do dono, `docs/DECISIONS.md`). Pausa e pergunta explícita continuam obrigatórias para: qualquer coisa que toque o projeto Supabase real, CI vermelho, ou mudança arquiteturalmente significativa/ambígua.
+- Base: `main`.
+- PR #14 (`Onda 4 fatia 4.2b`) foi mergeada por squash em `main` após `checks`, `db-migrations-rls` e Vercel verdes.
+- Merge SHA da PR #14: `1334c30df4caa3946ffc6dc2e7ce706a36cb5793`.
+- Branch desta entrega: `plan-captioned-video-export`.
+- Escopo: **somente planejamento/documentação** da nova saída de vídeo legendado e obrigações arquiteturais para evitar retrabalho no worker.
+- Nenhuma migration, tabela, flag em código, endpoint, UI, billing ou renderização foi implementada.
 
-## Infraestrutura (inalterado desde a última entrega)
+## Política de merge
 
-Vercel (free) + projeto Supabase (free) já criados pelo dono; domínio ainda não comprado. Conta Cloudflare R2 real criada anteriormente (bucket `pastescribe-media`). **Nenhuma migration foi aplicada no projeto Supabase real do dono** — segue pendente de autorização explícita, com 12 migrations acumuladas (`0001`–`0012`, sem mudança nesta entrega — 4.2b é só código de aplicação). Variáveis de storage ainda pendentes no projeto Vercel real.
+Merge automático continua autorizado quando todos os checks obrigatórios estiverem verdes. Pausa/revisão explícita continua obrigatória para:
 
-## Correção de desenho registrada na entrega anterior (ainda relevante)
+- tocar o projeto Supabase real;
+- alterar produção/DNS/serviço pago;
+- CI vermelho;
+- primeira migration/contrato irreversível de renderização;
+- decisão arquitetural ambígua.
 
-A primeira versão da fila (fatia 4.2a) tinha uma função só que criava o job **e** reservava orçamento no mesmo instante, presumindo duração conhecida — corrigido para `enqueue_job` (sem custo) + `reserve_job_budget` (chamada pelo worker só depois da duração real). Detalhe completo em `docs/DECISIONS.md`, resumo no HANDOFF anterior (`git log`).
+## Estado real da Onda 4
 
-## O que esta entrega contém: Onda 4 fatia 4.2b — primeiro consumidor real da fila
+### Entregue e mergeado
 
-- **`POST /api/uploads/[id]/complete`**: depois de marcar o `media_asset` como `validated`, chama `consume_quota` (bucket `enqueue:user:<uuid>`, janela = dia UTC, limite `MAX_JOBS_ENQUEUED_PER_DAY = 20` — provisório, `apps/web/lib/jobs/constants.ts`) e, se passar, `enqueue_job` (via admin client) — cria o `transcription_job` em `'queued'`, **sem nenhum orçamento envolvido**. A resposta ganhou `job: {id, state} | null` e `jobError` — falha em enfileirar (quota estourada ou erro) não derruba a validação do upload, que já aconteceu de verdade; os dois domínios de falha (upload válido vs. job pôde nascer) ficam separados na resposta.
-- **`apps/web/lib/jobs/constants.ts`** (novo): `MAX_JOBS_ENQUEUED_PER_DAY`, `jobEnqueueQuotaBucket(userId)`, `jobEnqueueQuotaWindow(now?)` — funções puras, testadas.
-- Nenhuma migration nova. Decisão completa (por que automático, por que a quota não é o gate de orçamento de IA, por que falha de enqueue não derruba a resposta 200) em `docs/DECISIONS.md`.
+- 4.1: storage R2 + upload autenticado e validado.
+- 4.2a: `transcription_jobs`/`job_steps`, funções de fila, duração real e reserva separada.
+- 4.2b: upload validado consome quota de enqueue e cria `transcription_job` real.
 
-## Configuração manual pendente (inalterado desde a última entrega)
+### Próxima fatia exata
 
-1. Variáveis de storage no projeto Vercel real (`STORAGE_PROVIDER`, `S3_ENDPOINT`, `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`).
-2. Bootstrap de `platform_admins`:
-   ```sql
-   insert into public.platform_admins (user_id)
-   select id from auth.users where email = 'lucasds50@gmail.com';
-   ```
+**Onda 4 fatia 4.2c — worker Python + FFmpeg + provider fake.**
 
-## Entregas anteriores (mergeadas)
+Aceite principal permanece:
 
-- **Onda 4 fatia 4.2a (+ correção)** — `transcription_jobs`/`job_steps`, `enqueue_job`/`reserve_job_budget`/`claim_next_job`/`heartbeat_job`/`advance_job_step`/`complete_job`/`fail_job`, 176 testes pgTAP.
-- **Onda 4 fatia 4.1** — `packages/storage` (R2 real), `media_assets`, upload autenticado (presigned PUT + validação pós-upload).
-- **Onda 3 fatia 3.3** — `/admin` com kill switches e criação de `budget_periods`.
-- **Onda 3 fatia 3.1/3.2** — billing/ledger/orçamento/quota completo, 5 funções atômicas.
-- **Fatia 2.2/2.3** — Supabase Auth SSR completo, estado autenticado no header, `/{locale}/app`.
+1. `claim_next_job`;
+2. adquirir mídia do storage;
+3. `ffprobe` para duração real;
+4. `reserve_job_budget`;
+5. pipeline/provider fake;
+6. `complete_job` ou `fail_job`;
+7. cleanup, heartbeat, retry e timeout.
 
-Detalhes completos em commits/PRs anteriores (`git log`) e em `docs/DECISIONS.md`.
+Obrigações P0 arquiteturais adicionadas pela nova funcionalidade, sem desviar o aceite:
 
-## Verificação real feita nesta sessão (não só "deveria funcionar")
+- runner/porta de FFmpeg testável;
+- progresso estruturado;
+- timeout e cancelamento cooperativo;
+- limites de CPU, memória, disco, duração e bytes;
+- diretório temporário por operação e cleanup em todos os caminhos;
+- telemetria de mídia: tipo de operação, wall time, tentativas, bytes, codec, frame rate e resolução;
+- storage preparado conceitualmente para futuros outputs temporários;
+- fixture simples de inserção de legenda somente se couber sem ampliar materialmente a fatia.
 
-- **Tipagem verificada via `tsc`**: as duas chamadas `.rpc("consume_quota", ...)` e `.rpc("enqueue_job", ...)` batem com `Database["public"]["Functions"]` (`packages/database`) — é a primeira vez que código de `apps/web` chama uma função Postgres via `.rpc()` neste projeto.
-- **4 testes novos** (`apps/web/test/jobs.test.ts`) para as funções puras `jobEnqueueQuotaBucket`/`jobEnqueueQuotaWindow`.
-- **Servidor real**: `curl -X POST /api/uploads/<id>/complete` sem Supabase configurado confirmado devolvendo `503 {"error":"not_configured"}` — o fail-closed de sempre, inalterado pela mudança.
-- **`pnpm lint && pnpm typecheck && pnpm test && pnpm build`**: todos verdes (79 testes JS/TS + 2 skips esperados do S3 sem credenciais + 176 pgTAP, sem mudança na camada de banco).
-- **O que NÃO pôde ser testado ao vivo**: o ciclo completo (sessão real → upload → complete → `enqueue_job` de verdade → linha em `transcription_jobs`) — exigiria um projeto Supabase real com usuário logado, impossível neste sandbox. Mesma limitação já registrada para todo fluxo autenticado desta sessão; `consume_quota`/`enqueue_job` já têm cobertura pgTAP profunda desde a 4.2a, então o risco é só na integração via `.rpc()`, não na lógica em si.
+Não entram na 4.2c: `render_jobs`, MP4 para usuário, editor/presets, quote, checkout, compra ou benefício gratuito.
 
-## Como testar
+## PR #14 e o ciclo HTTP real
 
-```bash
-pnpm install
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
-bash scripts/test-db-local.sh
-```
+A PR #14 está tecnicamente completa e mergeada:
 
-Para testar o enfileiramento de ponta a ponta: aplicar as migrations no projeto real, configurar storage na Vercel, logar via `/login`, subir um arquivo e chamar `POST /api/uploads/<id>/complete` com uma sessão real — a resposta deve trazer `job: {id, state: "queued"}`.
+- lint, typecheck, testes e build verdes;
+- 176 testes pgTAP verdes;
+- deploy Vercel verde;
+- tipagem das RPCs `consume_quota` e `enqueue_job` validada.
 
-## Riscos e limitações
+O ciclo HTTP completo `sessão real → upload → complete → linha real em transcription_jobs` **continua não exercitado** porque:
 
-- **Nenhuma migration foi aplicada no projeto Supabase real do dono** — `0001`–`0012` só rodaram neste sandbox.
-- O ciclo HTTP completo (upload → complete → job criado) não foi exercitado ao vivo — ver seção de verificação acima.
-- Sem worker nenhum ainda, todo job enfileirado fica parado em `queued` para sempre em produção — isso é a fatia 4.2c.
-- `MAX_JOBS_ENQUEUED_PER_DAY = 20` é um número provisório, sem calibragem nenhuma — ajustável sem migration (é só uma constante TS).
-- Retomar um job em `awaiting_user_confirmation` depois que o usuário pagar/upgradar é **A confirmar** — nada construído ainda (Onda 9).
-- `source_kind='url'` é só estrutural — nenhuma rota, adapter, SSRF ou normalização de URL existe ainda (Onda 8).
-- Variáveis de storage ainda não existem no projeto Vercel real (herdado da fatia 4.1).
+- migrations `0001`–`0012` ainda não foram aplicadas ao projeto Supabase real;
+- variáveis do storage ainda não estão configuradas no projeto Vercel real;
+- tocar esse ambiente exige autorização explícita.
 
-## Restrições que não podem ser violadas (inalteradas)
+Isso não é uma promessa de teste feito. O risco restante é integração com a infraestrutura real; a lógica SQL e contratos estão cobertos por CI/pgTAP.
 
-Não trabalhar em `main`; não alterar DNS/produção; não inserir segredos; não prometer feature que não existe; não liberar IA gratuita sem os gates completos da Onda 3 (falta o provider de billing + Turnstile/rate limits); não aplicar migrations no projeto Supabase real sem autorização explícita.
+## Nova funcionalidade planejada
+
+O PasteScribe poderá futuramente:
+
+> Exportar o vídeo com as legendas inseridas.
+
+A tese central permanece:
+
+> Paste any video. Get useful text.
+
+Não reposicionar como editor de vídeo, repostagem ou publicação. Não usar “pronto para publicar”.
+
+### Prioridade
+
+- **P1 comercial:** recurso completo.
+- **P0 arquitetural na fase atual:** somente primitivas do worker/storage/telemetria que evitem incompatibilidade futura.
+
+### Decisão de arquitetura
+
+- `transcription_jobs` permanece específico da transcrição;
+- futura Onda 6.4 cria `render_jobs` separado, após revisão explícita;
+- ambos podem compartilhar runtime do worker, storage, ledger de uso e observabilidade;
+- não criar tabela genérica de jobs nem schema de renderização agora.
+
+## Entrada exata por onda/fatia
+
+### Onda 4.2c
+
+Somente compatibilidade arquitetural do worker, descrita acima.
+
+### Onda 6.1
+
+Editor de transcrição e player sincronizado.
+
+### Onda 6.2
+
+TXT, Markdown, DOCX, PDF, SRT, VTT e JSON.
+
+### Onda 6.3 — início real da experiência de vídeo legendado
+
+- módulo secundário abaixo da transcrição;
+- preview no navegador de até aproximadamente 15 segundos;
+- timestamps reais;
+- presets, fontes, cores, posição e reset;
+- mobile, acessibilidade, cache/idempotência e analytics sem PII;
+- sem timeline ou editor avançado.
+
+### Onda 6.4 — início real da renderização completa
+
+- revisão explícita do schema;
+- `render_jobs` separado;
+- presets/settings versionados;
+- FFmpeg e MP4 com áudio preservado;
+- 720p/1080p conforme entitlement;
+- progresso, cancelamento seguro, retry finito e idempotência;
+- reserva/reconciliação de custo com provider/entitlement fake;
+- output temporário, URL assinada, TTL e cleanup;
+- flags desligadas por padrão.
+
+Nenhum pagamento real ativo nessa fatia.
+
+### Onda 9.3
+
+Quote server-side e compra avulsa de vídeo legendado.
+
+### Onda 9.4
+
+Pacotes, franquia de planos e primeira exportação gratuita elegível:
+
+- uma vez por conta verificada;
+- vídeo de até 2 minutos;
+- máximo 720p;
+- presets limitados;
+- entitlement durável;
+- Turnstile, orçamento, concorrência, limites globais e sinais de abuso;
+- IP apenas como sinal secundário;
+- free sujeito a Normal/Economy/Restricted/Blocked; paid preservado.
+
+### Onda 9.5
+
+Analytics do funil e experimentos de preço; decisão explícita entre minutos separados, créditos únicos ou modelo combinado.
+
+### Onda 10
+
+Comunicação secundária em features, pricing, FAQ e páginas de legendas/exports. Homepage preserva a tese principal.
+
+Copy aceitável:
+
+> Exporte como texto, SRT, VTT ou vídeo com as legendas inseridas.
+
+## Decisões comerciais e de custo
+
+- preço final não foi hardcoded;
+- quote deve considerar duração, resolução, codec, frame rate, preset, scaling, processamento, storage, egress, retries, gateway, impostos e reserva;
+- markup não é margem de contribuição;
+- transcrição e renderização mantêm categorias internas de custo separadas;
+- FFmpeg/storage/egress não entram artificialmente no modelo de chamadas de IA;
+- documento específico de custo de mídia só será criado após a 4.2c produzir medições reais.
+
+## Contratos planejados
+
+Sem tabelas agora, mas o desenho exige schemas versionados para:
+
+- preset imutável por versão;
+- settings validados;
+- quote expirável;
+- render job;
+- output MP4 temporário;
+- entitlement;
+- uso/reserva/captura;
+- compra;
+- expiração/download.
+
+Quote, preço, saldo, entitlement e pagamento são autoridade do servidor.
+
+## Segurança e abuso adicionados
+
+- exaustão de CPU/memória/disco;
+- arquivos enormes/corrompidos;
+- codecs maliciosos e decompression bombs;
+- retries provocados;
+- render duplicado;
+- downloads excessivos;
+- storage abandonado;
+- quote adulterado;
+- confirmação de compra apenas no client;
+- reutilização do benefício gratuito;
+- múltiplas contas;
+- alteração de resolução/duração/settings após quote.
+
+Gates completos em `docs/THREAT_MODEL.md` e `docs/CAPTIONED_VIDEO_EXPORT.md`.
+
+## Arquivos modificados nesta entrega
+
+- `.claude/MEMORY_MAP.md`;
+- `docs/CAPTIONED_VIDEO_EXPORT.md` — novo canônico;
+- `docs/ROADMAP.md`;
+- `docs/HANDOFF.md`;
+- `docs/PASTESCRIBE_BRIEFING.md`;
+- `docs/PASTESCRIBE_MONETIZATION.md`;
+- `docs/DECISIONS.md`;
+- `docs/PENDING_FEATURES.md`;
+- `docs/ARCHITECTURE.md`;
+- `docs/DATABASE.md`;
+- `docs/THREAT_MODEL.md`;
+- `docs/FEATURE_FLAGS.md`;
+- `docs/DESIGN_SYSTEM.md`;
+- `docs/ANALYTICS_EVENTS.md`;
+- `docs/API.md`;
+- `docs/AI_COST_MODEL.md`.
+
+## O que não foi implementado
+
+- preview;
+- presets/fontes no código;
+- `render_jobs` ou migration;
+- renderização MP4;
+- extensão de `StoragePort` para download/output;
+- billing/quote/checkout;
+- benefício gratuito;
+- eventos/flags em packages;
+- copy pública prometendo disponibilidade;
+- documento de custo de mídia sem medições.
+
+## Configuração manual pendente
+
+1. Aplicar migrations `0001`–`0012` no projeto Supabase real, somente com autorização.
+2. Configurar variáveis R2 na Vercel real.
+3. Inserir o primeiro `platform_admin` no projeto real.
+4. Exercitar o ciclo HTTP autenticado de ponta a ponta depois dos itens 1–3.
+
+## Checks aplicáveis
+
+Esta entrega é documental, sem código ou migration. Ainda assim, a PR deve passar:
+
+- checks de documentação/repositório;
+- lint;
+- typecheck;
+- testes;
+- build;
+- `db-migrations-rls` sem regressão;
+- deploy Vercel.
 
 ## Próximo passo exato
 
-1. Onda 4 fatia 4.2c: worker Python (FastAPI, `uv`) com FFmpeg + provider fake, rodando local em Docker — implementa o ciclo `claim_next_job` → descobre duração real (`ffprobe`) → `reserve_job_budget` → pipeline → `complete_job`/`fail_job`. Retomar aí a decisão de host (Railway/Render/Fly/VPS, hoje "a definir") e a estratégia de build sem depender do pull de imagem do Docker Hub bloqueado neste sandbox.
-2. Onda 4 fatia 4.3: UI de processamento (etapas reais, `aria-live`, cancelamento) — é também quando `transcription_jobs`/`job_steps` ganham a primeira RLS policy de SELECT por workspace, e quando o usuário passa a ver o status do próprio job na tela.
-3. Onda 3 fatia 3.4 (Turnstile + rate limits) segue sem alvo real — permanece adiada, não esquecida.
-4. Quando o dono autorizar: aplicar todas as migrations (`0001`–`0012`) no projeto Supabase real + configurar as 6 variáveis de storage na Vercel + rodar o bootstrap de `platform_admins`.
-
-## Documentos de memória atualizados nesta sessão
-
-`docs/DATABASE.md`, `docs/DECISIONS.md`, `docs/HANDOFF.md` (este).
+Depois do merge desta PR de planejamento, iniciar **Onda 4 fatia 4.2c**. Não iniciar a experiência de vídeo legendado antes da Onda 6.3. Não criar `render_jobs` antes da revisão explícita da Onda 6.4.
