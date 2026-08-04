@@ -1,5 +1,5 @@
+export type { Database, TranscriptSource } from "./schema";
 export type {
-  Database,
   Json,
   WorkspaceRole,
   CreditLedgerKind,
@@ -15,6 +15,6 @@ export type {
 } from "./types";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "./types";
+import type { Database } from "./schema";
 
 export type TypedSupabaseClient = SupabaseClient<Database>;
