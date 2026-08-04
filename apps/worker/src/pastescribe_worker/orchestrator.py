@@ -188,8 +188,8 @@ class WorkerOrchestrator:
         if timeout_seconds <= 0:
             raise TimeoutError("job deadline exceeded")
 
-        operation = asyncio.create_task(awaitable)
-        control = asyncio.create_task(control_event.wait())
+        operation: asyncio.Future[T] = asyncio.ensure_future(awaitable)
+        control: asyncio.Task[bool] = asyncio.create_task(control_event.wait())
         done, _ = await asyncio.wait(
             {operation, control},
             timeout=timeout_seconds,
@@ -200,7 +200,7 @@ class WorkerOrchestrator:
             control.cancel()
             with suppress(asyncio.CancelledError):
                 await control
-            return await operation
+            return operation.result()
 
         operation.cancel()
         with suppress(asyncio.CancelledError):
