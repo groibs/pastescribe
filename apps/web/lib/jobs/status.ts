@@ -106,7 +106,7 @@ export function snapshotToProgressStage(snapshot: JobStatusSnapshot): JobProgres
     return jobStateToProgressStage(snapshot.job.state);
   }
 
-  for (const step of snapshot.steps.toReversed()) {
+  for (const step of [...snapshot.steps].reverse()) {
     const parsed = jobStateSchema.safeParse(step.toState);
     if (
       parsed.success &&
