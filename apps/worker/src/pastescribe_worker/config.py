@@ -153,4 +153,6 @@ class WorkerConfig:
         ):
             raise ConfigurationError("S3 storage requires endpoint, bucket and credentials")
         if self.autostart and not self.supabase_configured:
-            raise ConfigurationError("WORKER_AUTOSTART requires Supabase service-role configuration")
+            raise ConfigurationError(
+                "WORKER_AUTOSTART requires Supabase service-role configuration"
+            )
