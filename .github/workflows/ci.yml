@@ -12,7 +12,7 @@ concurrency:
 jobs:
   checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
 
@@ -23,8 +23,21 @@ jobs:
           node-version: 22
           cache: pnpm
 
-      - name: Install dependencies
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install worker system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install uv==0.11.18
+
+      - name: Install JavaScript dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Install worker dependencies
+        run: uv sync --project apps/worker --extra dev
 
       - name: Lint
         run: pnpm lint
