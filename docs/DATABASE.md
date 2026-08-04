@@ -103,7 +103,7 @@ Princípios:
 
 | Função | Responsabilidade | Chamada por |
 |---|---|---|
-| `enqueue_job(workspace_id, created_by, source_kind, idempotency_key, media_asset_id, source_url, priority, max_retries)` | valida a consistência de `source_kind` (upload: `media_asset` no workspace certo + `status='validated'`; url: só checa parâmetros, sem SSRF/adapter ainda) + `insert` do job em `'queued'` + `job_steps` inicial — **sem orçamento nenhum envolvido**, criar o job é determinístico e grátis | web (server, via admin client — ainda não ligado a nenhuma rota; isso é a fatia 4.2b) |
+| `enqueue_job(workspace_id, created_by, source_kind, idempotency_key, media_asset_id, source_url, priority, max_retries)` | valida a consistência de `source_kind` (upload: `media_asset` no workspace certo + `status='validated'`; url: só checa parâmetros, sem SSRF/adapter ainda) + `insert` do job em `'queued'` + `job_steps` inicial — **sem orçamento nenhum envolvido**, criar o job é determinístico e grátis | web (server, via admin client — chamada por `POST /api/uploads/[id]/complete` desde a fatia 4.2b, atrás de `consume_quota`) |
 | `claim_next_job(worker_id, capabilities, lease_seconds)` | `FOR UPDATE SKIP LOCKED` sobre `queued` já no horário, ordenado por prioridade; avança pro primeiro estado real do pipeline (`acquiring_media` pra upload, `resolving_metadata` pra url) e grava lease | worker |
 | `heartbeat_job(job_id, worker_id, lease_seconds)` | renova o lease — só o dono atual pode | worker |
 | `advance_job_step(job_id, worker_id, to_state, detail)` | transição intermediária dentro do pipeline (sem contenção — só o dono do lease chama), grava `job_steps` | worker |
