@@ -10,11 +10,20 @@ const STEPS = [
   { id: "completed", label: "Completed" },
 ] as const;
 
+const STATE_LABELS = {
+  complete: "Complete",
+  current: "Current",
+  pending: "Pending",
+  error: "Error",
+  cancelled: "Cancelled",
+} as const;
+
 describe("ProgressSteps", () => {
   it("marks the active step semantically and has no axe violations", async () => {
     const { container } = render(
       <ProgressSteps
         label="Transcription progress"
+        stateLabels={STATE_LABELS}
         steps={STEPS}
         currentStepId="processing"
       />
@@ -27,6 +36,7 @@ describe("ProgressSteps", () => {
     render(
       <ProgressSteps
         label="Transcription progress"
+        stateLabels={STATE_LABELS}
         steps={STEPS}
         currentStepId="processing"
         status="error"
