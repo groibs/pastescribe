@@ -67,13 +67,29 @@ function progressStatus(state: JobStatusSnapshot["job"]["state"]): ProgressSteps
 function terminalAlert(snapshot: JobStatusSnapshot, copy: ProcessingCopy) {
   switch (snapshot.job.state) {
     case "awaiting_user_confirmation":
-      return <Alert variant="warning" title={copy.awaitingTitle}>{copy.awaitingBody}</Alert>;
+      return (
+        <Alert variant="warning" title={copy.awaitingTitle}>
+          {copy.awaitingBody}
+        </Alert>
+      );
     case "failed":
-      return <Alert variant="error" title={copy.failedTitle}>{copy.failedBody}</Alert>;
+      return (
+        <Alert variant="error" title={copy.failedTitle}>
+          {copy.failedBody}
+        </Alert>
+      );
     case "cancelled":
-      return <Alert variant="info" title={copy.cancelledTitle}>{copy.cancelledBody}</Alert>;
+      return (
+        <Alert variant="info" title={copy.cancelledTitle}>
+          {copy.cancelledBody}
+        </Alert>
+      );
     case "expired":
-      return <Alert variant="warning" title={copy.expiredTitle}>{copy.expiredBody}</Alert>;
+      return (
+        <Alert variant="warning" title={copy.expiredTitle}>
+          {copy.expiredBody}
+        </Alert>
+      );
     default:
       return null;
   }
@@ -121,7 +137,7 @@ export function JobStatusClient({
         if (shouldPollJob(value.job.state)) {
           timer = setTimeout(poll, POLL_INTERVAL_MS);
         }
-      } catch (error) {
+      } catch {
         if (controller.signal.aborted) return;
         setRefreshFailed(true);
         timer = setTimeout(poll, POLL_INTERVAL_MS * 2);
@@ -200,13 +216,15 @@ export function JobStatusClient({
       </div>
 
       <p className="sr-only" aria-live="polite">
-        {copy.statusLabel}: {stateLabel}. {copy.updatedLabel}: {dateFormatter.format(new Date(snapshot.job.updatedAt))}.
+        {copy.statusLabel}: {stateLabel}. {copy.updatedLabel}:{" "}
+        {dateFormatter.format(new Date(snapshot.job.updatedAt))}.
       </p>
 
       <div className="mt-8 grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)]">
         <aside className="rounded-xl border border-outline-variant bg-surface p-5">
           <ProgressSteps
             label={copy.progressLabel}
+            stateLabels={copy.stepStateLabels}
             steps={stages}
             currentStepId={snapshotToProgressStage(snapshot)}
             status={progressStatus(snapshot.job.state)}
@@ -216,25 +234,38 @@ export function JobStatusClient({
         <section className="space-y-6">
           <div className="grid gap-3 rounded-xl border border-outline-variant bg-surface p-5 sm:grid-cols-3">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{copy.durationLabel}</p>
-              <p className="mt-1 font-mono text-sm font-semibold text-on-surface">{formatDuration(snapshot.job.durationSeconds)}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                {copy.durationLabel}
+              </p>
+              <p className="mt-1 font-mono text-sm font-semibold text-on-surface">
+                {formatDuration(snapshot.job.durationSeconds)}
+              </p>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{copy.attemptsLabel}</p>
-              <p className="mt-1 font-mono text-sm font-semibold text-on-surface">{snapshot.job.retryCount}/{snapshot.job.maxRetries}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                {copy.attemptsLabel}
+              </p>
+              <p className="mt-1 font-mono text-sm font-semibold text-on-surface">
+                {snapshot.job.retryCount}/{snapshot.job.maxRetries}
+              </p>
             </div>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">{copy.updatedLabel}</p>
-              <time dateTime={snapshot.job.updatedAt} className="mt-1 block text-sm font-semibold text-on-surface">
+              <p className="text-xs font-semibold uppercase tracking-wide text-on-surface-variant">
+                {copy.updatedLabel}
+              </p>
+              <time
+                dateTime={snapshot.job.updatedAt}
+                className="mt-1 block text-sm font-semibold text-on-surface"
+              >
                 {dateFormatter.format(new Date(snapshot.job.updatedAt))}
               </time>
             </div>
           </div>
 
-          {refreshFailed ? <Alert variant="warning">{copy.refreshError}</Alert> : null}
+          {refreshFailed ? <Alert variant="warning" title={copy.refreshError} /> : null}
           {terminalAlert(snapshot, copy)}
-          {cancelMessage ? <Alert variant="info">{cancelMessage}</Alert> : null}
-          {cancelFailed ? <Alert variant="error">{copy.cancelError}</Alert> : null}
+          {cancelMessage ? <Alert variant="info" title={cancelMessage} /> : null}
+          {cancelFailed ? <Alert variant="error" title={copy.cancelError} /> : null}
 
           {canCancelJob(snapshot.job.state) ? (
             <Button
@@ -253,20 +284,27 @@ export function JobStatusClient({
               <div className="mt-5 space-y-2">
                 {snapshot.transcript.segments.length > 0 ? (
                   snapshot.transcript.segments.map((segment) => (
-                    <article key={segment.id} className="grid gap-2 border-b border-outline-variant py-4 sm:grid-cols-[72px_1fr]">
+                    <article
+                      key={segment.id}
+                      className="grid gap-2 border-b border-outline-variant py-4 sm:grid-cols-[72px_1fr]"
+                    >
                       <time className="font-mono text-sm font-semibold text-primary">
                         {formatSegmentTime(segment.startMs)}
                       </time>
                       <div>
                         {segment.speakerLabel ? (
-                          <p className="mb-1 text-sm font-semibold text-on-surface-variant">{segment.speakerLabel}</p>
+                          <p className="mb-1 text-sm font-semibold text-on-surface-variant">
+                            {segment.speakerLabel}
+                          </p>
                         ) : null}
                         <p className="whitespace-pre-wrap text-on-surface">{segment.text}</p>
                       </div>
                     </article>
                   ))
                 ) : (
-                  <p className="mt-4 whitespace-pre-wrap text-on-surface">{snapshot.transcript.text}</p>
+                  <p className="mt-4 whitespace-pre-wrap text-on-surface">
+                    {snapshot.transcript.text}
+                  </p>
                 )}
               </div>
             ) : (
