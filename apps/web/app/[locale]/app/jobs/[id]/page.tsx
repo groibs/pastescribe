@@ -41,15 +41,12 @@ export default async function JobStatusPage({ params }: PageProps) {
     redirect(`/${locale}/login`);
   }
 
-  let snapshot;
-  try {
-    snapshot = await readJobStatus(supabase, id);
-  } catch (error) {
+  const snapshot = await readJobStatus(supabase, id).catch((error: unknown) => {
     if (error instanceof JobStatusReadError && error.code === "not_found") {
       notFound();
     }
     throw error;
-  }
+  });
 
   return (
     <>
