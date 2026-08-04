@@ -25,7 +25,7 @@ export type BudgetReservationStatus = "reserved" | "captured" | "released" | "ex
 export type UsageOrigin = "free" | "paid";
 export type MediaAssetStatus = "pending_upload" | "validated" | "rejected" | "deleted";
 export type BillingInterval = "monthly" | "yearly";
-export type TranscriptionJobSourceKind = "upload";
+export type TranscriptionJobSourceKind = "upload" | "url";
 export type JobStepActor = "web" | "worker" | "admin";
 /** Espelha packages/contracts/src/job-states.ts (JOB_STATES) — fonte canônica. */
 export type JobState =
@@ -691,7 +691,8 @@ export type Database = {
           workspace_id: string;
           created_by: string;
           source_kind: TranscriptionJobSourceKind;
-          media_asset_id: string;
+          media_asset_id: string | null;
+          source_url: string | null;
           state: JobState;
           priority: number;
           idempotency_key: string;
@@ -704,6 +705,7 @@ export type Database = {
           dead_letter: boolean;
           cancel_requested_at: string | null;
           budget_reservation_id: string | null;
+          duration_seconds: number | null;
           error_code: string | null;
           error_detail: string | null;
           created_at: string;
@@ -714,7 +716,8 @@ export type Database = {
           workspace_id: string;
           created_by: string;
           source_kind?: TranscriptionJobSourceKind;
-          media_asset_id: string;
+          media_asset_id?: string | null;
+          source_url?: string | null;
           state?: JobState;
           priority?: number;
           idempotency_key: string;
@@ -727,6 +730,7 @@ export type Database = {
           dead_letter?: boolean;
           cancel_requested_at?: string | null;
           budget_reservation_id?: string | null;
+          duration_seconds?: number | null;
           error_code?: string | null;
           error_detail?: string | null;
           created_at?: string;
@@ -737,7 +741,8 @@ export type Database = {
           workspace_id?: string;
           created_by?: string;
           source_kind?: TranscriptionJobSourceKind;
-          media_asset_id?: string;
+          media_asset_id?: string | null;
+          source_url?: string | null;
           state?: JobState;
           priority?: number;
           idempotency_key?: string;
@@ -750,6 +755,7 @@ export type Database = {
           dead_letter?: boolean;
           cancel_requested_at?: string | null;
           budget_reservation_id?: string | null;
+          duration_seconds?: number | null;
           error_code?: string | null;
           error_detail?: string | null;
           created_at?: string;
@@ -889,19 +895,30 @@ export type Database = {
         };
         Returns: Database["public"]["Tables"]["budget_reservations"]["Row"];
       };
-      reserve_free_budget_and_enqueue: {
+      enqueue_job: {
         Args: {
           p_workspace_id: string;
           p_created_by: string;
-          p_media_asset_id: string;
+          p_source_kind: TranscriptionJobSourceKind;
+          p_idempotency_key: string;
+          p_media_asset_id?: string | null;
+          p_source_url?: string | null;
+          p_priority?: number;
+          p_max_retries?: number;
+        };
+        Returns: Database["public"]["Tables"]["transcription_jobs"]["Row"];
+      };
+      reserve_job_budget: {
+        Args: {
+          p_job_id: string;
+          p_worker_id: string;
+          p_duration_seconds: number;
           p_envelope: BudgetEnvelope;
           p_period_start: string;
           p_period_end: string;
           p_identity_key: string;
           p_estimated_cost_cents_brl: number;
           p_idempotency_key: string;
-          p_priority?: number;
-          p_max_retries?: number;
           p_budget_expires_in_seconds?: number;
         };
         Returns: Database["public"]["Tables"]["transcription_jobs"]["Row"];

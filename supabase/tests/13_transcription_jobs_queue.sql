@@ -1,8 +1,12 @@
--- reserve_free_budget_and_enqueue / claim_next_job / heartbeat_job /
--- advance_job_step / complete_job / fail_job — fila de transcrição
+-- enqueue_job / claim_next_job / heartbeat_job / advance_job_step /
+-- reserve_job_budget / complete_job / fail_job — fila de transcrição
 -- (docs/DATABASE.md, docs/ARCHITECTURE.md §Fila durável).
+--
+-- Desenho revisado (docs/DECISIONS.md): criar o job (enqueue_job) não
+-- envolve orçamento nenhum — só depois que a duração REAL é conhecida
+-- (o worker chamando reserve_job_budget) é que o free é checado.
 begin;
-select plan(37);
+select plan(52);
 
 insert into auth.users (id, email) values ('a1111111-1111-1111-1111-111111111111', 'alice@example.com');
 
@@ -41,14 +45,13 @@ select is(
 );
 
 -- ---------------------------------------------------------------------
--- Enfileirar rejeita asset não validado / de outro workspace.
+-- enqueue_job rejeita asset não validado / de outro workspace / combinação inválida.
 -- ---------------------------------------------------------------------
 select throws_ok(
-  $$ select public.reserve_free_budget_and_enqueue(
+  $$ select public.enqueue_job(
        (select id from public.workspaces where created_by = 'a1111111-1111-1111-1111-111111111111' and is_personal = true),
-       'a1111111-1111-1111-1111-111111111111',
-       (select id from public.media_assets where storage_key = 'uploads/personal/asset-pending'),
-       'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 50, 'enqueue-pending'
+       'a1111111-1111-1111-1111-111111111111', 'upload', 'enqueue-pending',
+       (select id from public.media_assets where storage_key = 'uploads/personal/asset-pending')
      ) $$,
   'P0001',
   null,
@@ -56,54 +59,57 @@ select throws_ok(
 );
 
 select throws_ok(
-  $$ select public.reserve_free_budget_and_enqueue(
+  $$ select public.enqueue_job(
        (select id from public.workspaces where name = 'Outro workspace'),
-       'a1111111-1111-1111-1111-111111111111',
-       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1'),
-       'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 50, 'enqueue-wrong-workspace'
+       'a1111111-1111-1111-1111-111111111111', 'upload', 'enqueue-wrong-workspace',
+       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1')
      ) $$,
   'P0001',
   null,
   'enfileirar um media_asset que pertence a outro workspace é rejeitado'
 );
 
--- ---------------------------------------------------------------------
--- Orçamento insuficiente: nada é criado (fail-closed, mesma transação).
--- ---------------------------------------------------------------------
 select throws_ok(
-  $$ select public.reserve_free_budget_and_enqueue(
+  $$ select public.enqueue_job(
        (select id from public.workspaces where created_by = 'a1111111-1111-1111-1111-111111111111' and is_personal = true),
-       'a1111111-1111-1111-1111-111111111111',
-       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1'),
-       'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 20000, 'enqueue-too-expensive'
+       'a1111111-1111-1111-1111-111111111111', 'upload', 'enqueue-bad-combo',
+       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1'), 'https://example.com/v'
      ) $$,
-  'P0001',
+  '22023',
   null,
-  'orçamento insuficiente rejeita o enfileiramento'
+  'upload com source_url também preenchido é rejeitado'
 );
-select is(
-  (select count(*)::int from public.transcription_jobs where idempotency_key = 'enqueue-too-expensive'),
-  0,
-  'tentativa rejeitada por orçamento não deixou job nenhum pra trás'
+
+select throws_ok(
+  $$ select public.enqueue_job(
+       (select id from public.workspaces where created_by = 'a1111111-1111-1111-1111-111111111111' and is_personal = true),
+       'a1111111-1111-1111-1111-111111111111', 'carrier_pigeon', 'enqueue-bad-kind'
+     ) $$,
+  '22023',
+  null,
+  'source_kind desconhecido é rejeitado'
 );
 
 -- ---------------------------------------------------------------------
--- Enfileirar de verdade: cria job 'queued' + budget_reservation +
--- job_steps inicial.
+-- Enfileirar de verdade: cria job 'queued', sem orçamento nenhum ainda.
 -- ---------------------------------------------------------------------
 select lives_ok(
-  $$ select public.reserve_free_budget_and_enqueue(
+  $$ select public.enqueue_job(
        (select id from public.workspaces where created_by = 'a1111111-1111-1111-1111-111111111111' and is_personal = true),
-       'a1111111-1111-1111-1111-111111111111',
-       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1'),
-       'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 50, 'job-low', 0::smallint
+       'a1111111-1111-1111-1111-111111111111', 'upload', 'job-low',
+       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1'), null, 0::smallint
      ) $$,
-  'enfileirar com orçamento e asset válidos funciona'
+  'enfileirar com asset válido funciona'
 );
 select is(
   (select state from public.transcription_jobs where idempotency_key = 'job-low'),
   'queued',
   'job nasce em queued'
+);
+select is(
+  (select budget_reservation_id from public.transcription_jobs where idempotency_key = 'job-low'),
+  null,
+  'job nasce sem nenhuma reserva de orçamento — isso só acontece depois que a duração real for conhecida'
 );
 select is(
   (select count(*)::int from public.job_steps js join public.transcription_jobs j on j.id = js.job_id
@@ -113,11 +119,10 @@ select is(
 );
 
 -- Duplo clique / retry do cliente: mesma idempotency_key não cria outro job.
-select public.reserve_free_budget_and_enqueue(
+select public.enqueue_job(
   (select id from public.workspaces where created_by = 'a1111111-1111-1111-1111-111111111111' and is_personal = true),
-  'a1111111-1111-1111-1111-111111111111',
-  (select id from public.media_assets where storage_key = 'uploads/personal/asset-1'),
-  'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 50, 'job-low'
+  'a1111111-1111-1111-1111-111111111111', 'upload', 'job-low',
+  (select id from public.media_assets where storage_key = 'uploads/personal/asset-1')
 ) is null;
 select is(
   (select count(*)::int from public.transcription_jobs where idempotency_key = 'job-low'),
@@ -125,13 +130,11 @@ select is(
   'reenviar a mesma idempotency_key não cria um segundo job'
 );
 
--- Segundo job, prioridade mais alta — deve ser reivindicado primeiro.
 select lives_ok(
-  $$ select public.reserve_free_budget_and_enqueue(
+  $$ select public.enqueue_job(
        (select id from public.workspaces where created_by = 'a1111111-1111-1111-1111-111111111111' and is_personal = true),
-       'a1111111-1111-1111-1111-111111111111',
-       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1'),
-       'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 50, 'job-high', 10::smallint
+       'a1111111-1111-1111-1111-111111111111', 'upload', 'job-high',
+       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1'), null, 10::smallint
      ) $$,
   'segundo enfileiramento (prioridade alta) funciona'
 );
@@ -161,14 +164,12 @@ select is(
   'job_steps registra a transição de claim (worker, queued→acquiring_media)'
 );
 
--- Reivindicar de novo pega o outro job (o de prioridade alta já não está mais 'queued').
 select is(
   (select idempotency_key from public.transcription_jobs where id = (select public.claim_next_job('worker-2')).id),
   'job-low',
   'segundo claim pega o job restante (job-high já foi reivindicado)'
 );
 
--- Fila vazia de novo: nenhum job 'queued' sobrou.
 select is(
   (select public.claim_next_job('worker-3')),
   null,
@@ -194,11 +195,98 @@ select lives_ok(
 );
 
 -- ---------------------------------------------------------------------
--- advance_job_step — transição intermediária dentro do pipeline.
+-- reserve_job_budget — job-high cabe no free: reserva e segue pra
+-- transcribing. Duração só é conhecida agora (nunca antes).
+-- ---------------------------------------------------------------------
+select throws_ok(
+  $$ select public.reserve_job_budget(
+       (select id from public.transcription_jobs where idempotency_key = 'job-high'),
+       'worker-intruso', 120, 'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 50, 'budget-job-high'
+     ) $$,
+  'P0001',
+  null,
+  'reserve_job_budget por um worker que não é dono do lease é rejeitado'
+);
+
+select lives_ok(
+  $$ select public.reserve_job_budget(
+       (select id from public.transcription_jobs where idempotency_key = 'job-high'),
+       'worker-1', 120, 'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 50, 'budget-job-high'
+     ) $$,
+  'reserve_job_budget cabendo no free funciona'
+);
+select is(
+  (select state from public.transcription_jobs where idempotency_key = 'job-high'),
+  'transcribing',
+  'job avança direto pra transcribing quando o orçamento cabe'
+);
+select is(
+  (select duration_seconds from public.transcription_jobs where idempotency_key = 'job-high'),
+  120,
+  'duration_seconds grava a duração real recebida do worker'
+);
+select isnt(
+  (select budget_reservation_id from public.transcription_jobs where idempotency_key = 'job-high'),
+  null,
+  'job-high ganhou uma reserva de orçamento de verdade'
+);
+
+-- Idempotência: chamar de novo (já em transcribing) não refaz nada.
+select public.reserve_job_budget(
+  (select id from public.transcription_jobs where idempotency_key = 'job-high'),
+  'worker-1', 999, 'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 50, 'budget-job-high'
+) is null;
+select is(
+  (select duration_seconds from public.transcription_jobs where idempotency_key = 'job-high'),
+  120,
+  'chamar reserve_job_budget de novo num job já transcribing é idempotente (não sobrescreve com 999)'
+);
+
+-- ---------------------------------------------------------------------
+-- reserve_job_budget — job-low excede o teto do free: vai pra
+-- awaiting_user_confirmation, sem cobrar ninguém (checkout pago não
+-- existe ainda), solta o lease.
+-- ---------------------------------------------------------------------
+select lives_ok(
+  $$ select public.reserve_job_budget(
+       (select id from public.transcription_jobs where idempotency_key = 'job-low'),
+       'worker-2', 36000, 'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 20000, 'budget-job-low'
+     ) $$,
+  'reserve_job_budget excedendo o free não lança erro pro chamador — resolve pro estado de confirmação'
+);
+select is(
+  (select state from public.transcription_jobs where idempotency_key = 'job-low'),
+  'awaiting_user_confirmation',
+  'job-low vai pra awaiting_user_confirmation por exceder o teto do free'
+);
+select is(
+  (select error_code from public.transcription_jobs where idempotency_key = 'job-low'),
+  'exceeds_free_tier',
+  'error_code explica o motivo'
+);
+select is(
+  (select lease_owner from public.transcription_jobs where idempotency_key = 'job-low'),
+  null,
+  'lease é solto — o worker não tem mais o que fazer aqui até existir fluxo pago'
+);
+select is(
+  (select duration_seconds from public.transcription_jobs where idempotency_key = 'job-low'),
+  36000,
+  'duration_seconds é gravada mesmo quando excede o free — a informação não se perde'
+);
+select is(
+  (select count(*)::int from public.budget_reservations where idempotency_key = 'budget-job-low'),
+  0,
+  'nenhuma reserva de orçamento foi criada pro job que excedeu o teto'
+);
+
+-- ---------------------------------------------------------------------
+-- advance_job_step — transição intermediária dentro do pipeline
+-- (job-high já está em transcribing, com lease do worker-1).
 -- ---------------------------------------------------------------------
 select throws_ok(
   $$ select public.advance_job_step(
-       (select id from public.transcription_jobs where idempotency_key = 'job-high'), 'worker-intruso', 'extracting_audio'
+       (select id from public.transcription_jobs where idempotency_key = 'job-high'), 'worker-intruso', 'postprocessing'
      ) $$,
   'P0001',
   null,
@@ -206,18 +294,18 @@ select throws_ok(
 );
 select lives_ok(
   $$ select public.advance_job_step(
-       (select id from public.transcription_jobs where idempotency_key = 'job-high'), 'worker-1', 'extracting_audio', 'ffprobe ok'
+       (select id from public.transcription_jobs where idempotency_key = 'job-high'), 'worker-1', 'postprocessing', 'transcrição ok'
      ) $$,
   'advance_job_step pelo dono do lease funciona'
 );
 select is(
   (select state from public.transcription_jobs where idempotency_key = 'job-high'),
-  'extracting_audio',
-  'estado avançou para extracting_audio'
+  'postprocessing',
+  'estado avançou para postprocessing'
 );
 select is(
   (select count(*)::int from public.job_steps js join public.transcription_jobs j on j.id = js.job_id
-     where j.idempotency_key = 'job-high' and js.from_state = 'acquiring_media' and js.to_state = 'extracting_audio'),
+     where j.idempotency_key = 'job-high' and js.from_state = 'transcribing' and js.to_state = 'postprocessing'),
   1,
   'job_steps registra a transição intermediária'
 );
@@ -228,7 +316,7 @@ select is(
 select lives_ok(
   $$ select public.complete_job(
        (select id from public.transcription_jobs where idempotency_key = 'job-high'),
-       'worker-1', 'fake-provider', 30, 20, 500, 400
+       'worker-1', 'fake-provider', 120, 20, 500, 400
      ) $$,
   'complete_job funciona pro dono do lease'
 );
@@ -253,7 +341,7 @@ select is(
 -- Idempotência: recompletar não recaptura nem duplica a entrada de uso.
 select public.complete_job(
   (select id from public.transcription_jobs where idempotency_key = 'job-high'),
-  'worker-1', 'fake-provider', 30, 20, 500, 400
+  'worker-1', 'fake-provider', 120, 20, 500, 400
 ) is null;
 select is(
   (select count(*)::int from public.usage_ledger_entries ul join public.transcription_jobs j on j.budget_reservation_id = ul.budget_reservation_id
@@ -262,7 +350,6 @@ select is(
   'recompletar um job já completed não duplica usage_ledger_entries'
 );
 
--- heartbeat/advance num job terminal são rejeitados.
 select throws_ok(
   $$ select public.heartbeat_job((select id from public.transcription_jobs where idempotency_key = 'job-high'), 'worker-1') $$,
   'P0001',
@@ -271,72 +358,89 @@ select throws_ok(
 );
 
 -- ---------------------------------------------------------------------
--- fail_job — retry com backoff até esgotar tentativas, depois
--- dead-letter + libera a reserva de orçamento.
+-- fail_job — job que JÁ tinha orçamento reservado, falha até esgotar
+-- as tentativas: dead_letter + refund integral da reserva.
 -- ---------------------------------------------------------------------
+select lives_ok(
+  $$ select public.enqueue_job(
+       (select id from public.workspaces where created_by = 'a1111111-1111-1111-1111-111111111111' and is_personal = true),
+       'a1111111-1111-1111-1111-111111111111', 'upload', 'job-retry',
+       (select id from public.media_assets where storage_key = 'uploads/personal/asset-1')
+     ) $$,
+  'terceiro enfileiramento (pra testar retry/dead-letter) funciona'
+);
+select public.claim_next_job('worker-3') is null;
+select public.reserve_job_budget(
+  (select id from public.transcription_jobs where idempotency_key = 'job-retry'),
+  'worker-3', 60, 'free_ai', '2026-08-01', '2026-08-31', 'user:alice', 20, 'budget-job-retry'
+) is null;
 select is(
-  (select max_retries from public.transcription_jobs where idempotency_key = 'job-low'),
+  (select state from public.transcription_jobs where idempotency_key = 'job-retry'),
+  'transcribing',
+  'job-retry também conseguiu reservar orçamento antes de começar a falhar'
+);
+
+select is(
+  (select max_retries from public.transcription_jobs where idempotency_key = 'job-retry'),
   3,
-  'job-low nasceu com max_retries padrão (3)'
+  'job-retry nasceu com max_retries padrão (3)'
 );
 
 select lives_ok(
   $$ select public.fail_job(
-       (select id from public.transcription_jobs where idempotency_key = 'job-low'), 'worker-2', 'ffmpeg_crash', 'exit code 1'
+       (select id from public.transcription_jobs where idempotency_key = 'job-retry'), 'worker-3', 'openai_timeout', 'timeout na chamada'
      ) $$,
-  'primeira falha de job-low (ainda com tentativas sobrando) funciona'
+  'primeira falha de job-retry (ainda com tentativas sobrando) funciona'
 );
 select is(
-  (select state from public.transcription_jobs where idempotency_key = 'job-low'),
+  (select state from public.transcription_jobs where idempotency_key = 'job-retry'),
   'queued',
   'primeira falha volta o job pra queued (retry)'
 );
 select is(
   (select status from public.budget_reservations br join public.transcription_jobs j on j.budget_reservation_id = br.id
-     where j.idempotency_key = 'job-low'),
+     where j.idempotency_key = 'job-retry'),
   'reserved',
   'reserva de orçamento continua reservada — ainda não esgotou as tentativas'
 );
 
--- Reivindica e falha de novo, até esgotar (max_retries=3 → 3ª falha é definitiva).
--- O backoff da 1ª falha empurra next_attempt_at pro futuro (produção
--- de verdade) — o teste simula o tempo passar adiantando a coluna
--- direto, já que pgTAP não tem como esperar de verdade.
-update public.transcription_jobs set next_attempt_at = now() where idempotency_key = 'job-low';
-select public.claim_next_job('worker-2', '{}', 1) is null;
-select public.fail_job((select id from public.transcription_jobs where idempotency_key = 'job-low'), 'worker-2', 'ffmpeg_crash') is null;
-update public.transcription_jobs set next_attempt_at = now() where idempotency_key = 'job-low';
-select public.claim_next_job('worker-2', '{}', 1) is null;
+-- Simula o tempo passar (o backoff real empurra next_attempt_at pro
+-- futuro — pgTAP não espera de verdade) e esgota as tentativas.
+update public.transcription_jobs set next_attempt_at = now() where idempotency_key = 'job-retry';
+select public.claim_next_job('worker-3', '{}', 1) is null;
+select public.fail_job((select id from public.transcription_jobs where idempotency_key = 'job-retry'), 'worker-3', 'openai_timeout') is null;
+update public.transcription_jobs set next_attempt_at = now() where idempotency_key = 'job-retry';
+select public.claim_next_job('worker-3', '{}', 1) is null;
 
 select lives_ok(
   $$ select public.fail_job(
-       (select id from public.transcription_jobs where idempotency_key = 'job-low'), 'worker-2', 'ffmpeg_crash', 'terceira e última'
+       (select id from public.transcription_jobs where idempotency_key = 'job-retry'), 'worker-3', 'openai_timeout', 'terceira e última'
      ) $$,
   'terceira falha (tentativas esgotadas) funciona'
 );
 select is(
-  (select state from public.transcription_jobs where idempotency_key = 'job-low'),
+  (select state from public.transcription_jobs where idempotency_key = 'job-retry'),
   'failed',
   'job termina em failed depois de esgotar as tentativas'
 );
 select is(
-  (select dead_letter from public.transcription_jobs where idempotency_key = 'job-low'),
+  (select dead_letter from public.transcription_jobs where idempotency_key = 'job-retry'),
   true,
   'job marcado como dead_letter'
 );
 select is(
   (select status from public.budget_reservations br join public.transcription_jobs j on j.budget_reservation_id = br.id
-     where j.idempotency_key = 'job-low'),
+     where j.idempotency_key = 'job-retry'),
   'released',
   'reserva de orçamento foi liberada — refund integral, ninguém paga por job que nunca terminou'
 );
 
 -- Idempotência: falhar de novo um job já failed não lança erro nem re-libera.
 select public.fail_job(
-  (select id from public.transcription_jobs where idempotency_key = 'job-low'), 'worker-2', 'ffmpeg_crash'
+  (select id from public.transcription_jobs where idempotency_key = 'job-retry'), 'worker-3', 'openai_timeout'
 ) is null;
 select is(
-  (select state from public.transcription_jobs where idempotency_key = 'job-low'),
+  (select state from public.transcription_jobs where idempotency_key = 'job-retry'),
   'failed',
   'falhar de novo um job já failed é idempotente (continua failed)'
 );
