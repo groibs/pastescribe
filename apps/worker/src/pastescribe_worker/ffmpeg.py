@@ -101,7 +101,10 @@ class FfmpegRunner:
         try:
             payload = cast(dict[str, Any], json.loads(output.stdout))
         except json.JSONDecodeError as error:
-            raise MediaProcessingError("invalid_probe_output", "ffprobe returned invalid JSON") from error
+            raise MediaProcessingError(
+                "invalid_probe_output",
+                "ffprobe returned invalid JSON",
+            ) from error
 
         raw_format = payload.get("format")
         format_data = raw_format if isinstance(raw_format, dict) else {}
@@ -115,9 +118,15 @@ class FfmpegRunner:
             duration = float(format_data["duration"])
             size_bytes = int(format_data.get("size") or media_path.stat().st_size)
         except (KeyError, TypeError, ValueError) as error:
-            raise MediaProcessingError("invalid_media_metadata", "missing duration or size") from error
+            raise MediaProcessingError(
+                "invalid_media_metadata",
+                "missing duration or size",
+            ) from error
         if not math.isfinite(duration) or duration <= 0:
-            raise MediaProcessingError("invalid_media_duration", "duration must be finite and positive")
+            raise MediaProcessingError(
+                "invalid_media_duration",
+                "duration must be finite and positive",
+            )
         if duration > self._config.max_duration_seconds:
             raise MediaProcessingError("duration_exceeded", "media duration exceeds worker limit")
         if size_bytes > self._config.max_input_bytes:
@@ -133,6 +142,16 @@ class FfmpegRunner:
         video_codec = video_stream.get("codec_name") if video_stream else None
         audio_codec = audio_stream.get("codec_name") if audio_stream else None
         container_format = format_data.get("format_name")
+        width = (
+            int(video_stream["width"])
+            if video_stream and video_stream.get("width")
+            else None
+        )
+        height = (
+            int(video_stream["height"])
+            if video_stream and video_stream.get("height")
+            else None
+        )
 
         return MediaProbe(
             duration_seconds=duration,
@@ -140,8 +159,8 @@ class FfmpegRunner:
             container_format=container_format if isinstance(container_format, str) else None,
             video_codec=video_codec if isinstance(video_codec, str) else None,
             audio_codec=audio_codec if isinstance(audio_codec, str) else None,
-            width=int(video_stream["width"]) if video_stream and video_stream.get("width") else None,
-            height=int(video_stream["height"]) if video_stream and video_stream.get("height") else None,
+            width=width,
+            height=height,
             frame_rate=_parse_rate(rate_raw),
         )
 
