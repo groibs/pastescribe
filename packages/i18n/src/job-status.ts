@@ -4,6 +4,13 @@ export type ProcessingCopy = {
   pageTitle: string;
   pageLead: string;
   progressLabel: string;
+  stepStateLabels: {
+    complete: string;
+    current: string;
+    pending: string;
+    error: string;
+    cancelled: string;
+  };
   stages: {
     received: string;
     preparing: string;
@@ -41,6 +48,13 @@ const en: ProcessingCopy = {
   pageTitle: "Transcription status",
   pageLead: "This page follows the real processing state. It does not trigger transcription again.",
   progressLabel: "Transcription progress",
+  stepStateLabels: {
+    complete: "Complete",
+    current: "Current",
+    pending: "Pending",
+    error: "Error",
+    cancelled: "Cancelled",
+  },
   stages: {
     received: "Received",
     preparing: "Preparing media",
@@ -97,6 +111,13 @@ const ptBr: ProcessingCopy = {
   pageTitle: "Status da transcrição",
   pageLead: "Esta página acompanha o estado real do processamento. Ela não dispara a transcrição novamente.",
   progressLabel: "Progresso da transcrição",
+  stepStateLabels: {
+    complete: "Concluído",
+    current: "Atual",
+    pending: "Pendente",
+    error: "Erro",
+    cancelled: "Cancelado",
+  },
   stages: {
     received: "Recebido",
     preparing: "Preparando mídia",
@@ -153,6 +174,13 @@ const es: ProcessingCopy = {
   pageTitle: "Estado de la transcripción",
   pageLead: "Esta página sigue el estado real del procesamiento. No vuelve a iniciar la transcripción.",
   progressLabel: "Progreso de la transcripción",
+  stepStateLabels: {
+    complete: "Completado",
+    current: "Actual",
+    pending: "Pendiente",
+    error: "Error",
+    cancelled: "Cancelado",
+  },
   stages: {
     received: "Recibido",
     preparing: "Preparando el medio",
