@@ -1,6 +1,12 @@
 # dependencies
 node_modules/
 .pnpm-store/
+apps/worker/.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 
 # builds
 .next/
