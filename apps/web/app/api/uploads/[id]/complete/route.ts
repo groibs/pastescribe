@@ -8,6 +8,8 @@ import { getSupabaseAdminClient } from "@/lib/supabase/admin";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { getStoragePort } from "@/lib/storage/config";
 import { ALLOWED_MEDIA_MIME_TYPES, MAX_UPLOAD_SIZE_BYTES, MIME_SNIFF_BYTE_COUNT } from "@/lib/uploads/constants";
+import { MAX_JOBS_ENQUEUED_PER_DAY, jobEnqueueQuotaBucket, jobEnqueueQuotaWindow } from "@/lib/jobs/constants";
+import type { TypedSupabaseClient } from "@pastescribe/database";
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -35,7 +37,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
   // RLS: só devolve a linha se o usuário for membro do workspace dela.
   const { data: asset } = await supabase
     .from("media_assets")
-    .select("id, storage_key, status")
+    .select("id, workspace_id, storage_key, status")
     .eq("id", id)
     .maybeSingle();
 
@@ -108,5 +110,68 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     })
     .eq("id", id);
 
-  return NextResponse.json({ status: "validated", contentType: detected.mime, sizeBytes: metadata.sizeBytes });
+  const enqueueResult = await enqueueUploadJob(admin, {
+    workspaceId: asset.workspace_id,
+    createdBy: userData.user.id,
+    mediaAssetId: asset.id,
+  });
+
+  return NextResponse.json({
+    status: "validated",
+    contentType: detected.mime,
+    sizeBytes: metadata.sizeBytes,
+    job: enqueueResult.job ? { id: enqueueResult.job.id, state: enqueueResult.job.state } : null,
+    jobError: enqueueResult.error,
+  });
+}
+
+type EnqueueUploadJobParams = {
+  workspaceId: string;
+  createdBy: string;
+  mediaAssetId: string;
+};
+
+/**
+ * Primeiro consumidor real de enqueue_job (Onda 4 fatia 4.2b). Só
+ * enfileira — nunca reserva orçamento aqui (isso é reserve_job_budget,
+ * chamada pelo worker só depois que a duração real da mídia for
+ * conhecida, docs/DECISIONS.md). consume_quota protege o passo de
+ * enfileirar contra abuso (não é o gate de orçamento de IA — é sobre
+ * CPU/banda do worker). Falha em qualquer um dos dois não derruba a
+ * resposta 200 da validação do upload — o asset já está validado de
+ * verdade; só o job não nasce, e o client sabe disso via `jobError`.
+ */
+async function enqueueUploadJob(
+  admin: TypedSupabaseClient,
+  { workspaceId, createdBy, mediaAssetId }: EnqueueUploadJobParams
+): Promise<{ job: { id: string; state: string } | null; error: string | null }> {
+  const quotaIdempotencyKey = `enqueue-quota:${mediaAssetId}`;
+  const { error: quotaError } = await admin.rpc("consume_quota", {
+    p_bucket: jobEnqueueQuotaBucket(createdBy),
+    p_window: jobEnqueueQuotaWindow(),
+    p_units: 1,
+    p_limit: MAX_JOBS_ENQUEUED_PER_DAY,
+    p_idempotency_key: quotaIdempotencyKey,
+    p_reference_type: "media_asset",
+    p_reference_id: mediaAssetId,
+  });
+
+  if (quotaError) {
+    return { job: null, error: "quota_exceeded" };
+  }
+
+  const jobIdempotencyKey = `upload:${mediaAssetId}`;
+  const { data: job, error: enqueueError } = await admin.rpc("enqueue_job", {
+    p_workspace_id: workspaceId,
+    p_created_by: createdBy,
+    p_source_kind: "upload",
+    p_idempotency_key: jobIdempotencyKey,
+    p_media_asset_id: mediaAssetId,
+  });
+
+  if (enqueueError || !job) {
+    return { job: null, error: "enqueue_failed" };
+  }
+
+  return { job: { id: job.id, state: job.state }, error: null };
 }
