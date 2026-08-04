@@ -188,10 +188,16 @@ class WorkerOrchestrator:
         if timeout_seconds <= 0:
             raise TimeoutError("job deadline exceeded")
 
+        async def wait_for_control() -> T:
+            await control_event.wait()
+            self._raise_control(cancel_requested, heartbeat_errors)
+            raise WorkerPipelineError("control_event_without_reason")
+
         operation: asyncio.Future[T] = asyncio.ensure_future(awaitable)
-        control: asyncio.Task[bool] = asyncio.create_task(control_event.wait())
+        control: asyncio.Task[T] = asyncio.create_task(wait_for_control())
+        futures: set[asyncio.Future[T]] = {operation, control}
         done, _ = await asyncio.wait(
-            {operation, control},
+            futures,
             timeout=timeout_seconds,
             return_when=asyncio.FIRST_COMPLETED,
         )
@@ -202,15 +208,18 @@ class WorkerOrchestrator:
                 await control
             return operation.result()
 
+        if control in done:
+            operation.cancel()
+            with suppress(asyncio.CancelledError):
+                await operation
+            return control.result()
+
         operation.cancel()
-        with suppress(asyncio.CancelledError):
-            await operation
         control.cancel()
         with suppress(asyncio.CancelledError):
+            await operation
+        with suppress(asyncio.CancelledError):
             await control
-
-        if control_event.is_set():
-            self._raise_control(cancel_requested, heartbeat_errors)
         raise TimeoutError("job stage timed out")
 
     async def _process_claimed_job(
