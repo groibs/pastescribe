@@ -4,7 +4,7 @@ Criado na Onda 0 em 2026-08-03. Ordem de dependências obrigatória (prompt-mest
 
 Legenda: ✅ concluída · 🔄 em andamento · ⬜ pendente
 
-## Onda 0 — Descoberta e governança 🔄 (esta entrega)
+## Onda 0 — Descoberta e governança 🔄
 
 Inventário, auditoria do Stitch, pesquisa (repos do dono + comunidade + docs oficiais), arquitetura, threat model, modelo de dados, estratégia de RLS/jobs/upload/SSRF, governança de custo, SEO, design system, skills locais, este plano.
 
@@ -14,64 +14,130 @@ Inventário, auditoria do Stitch, pesquisa (repos do dono + comunidade + docs of
 
 | Fatia | Conteúdo | Aceite |
 |---|---|---|
-| **1.1 (nesta PR)** Workspace + web mínima | pnpm workspaces + Turborepo; `apps/web` Next.js 16 (TS estrito, Tailwind 4, App Router) com i18n en/pt-br/es e páginas honestas mínimas; `packages/config` (env zod + flags com fallback seguro); `packages/contracts` (máquina de estados de job, catálogo de analytics); `packages/i18n`; CI (lint, typecheck, test, build); `.env.example` | `pnpm lint && pnpm typecheck && pnpm test && pnpm build` verdes no CI; app roda local sem credencial nenhuma |
-| 1.2 Design tokens + `packages/ui` base | tokens do `docs/DESIGN_SYSTEM.md` em Tailwind/CSS vars; Button, Input, URLInput, Badge, Alert, Skeleton com estados + testes + axe | idem + axe sem violações |
-| 1.3 Observabilidade base | `packages/observability` (logger estruturado com redação), request-id middleware, healthcheck | log nunca contém campos proibidos (teste) |
+| 1.1 Workspace + web mínima | pnpm workspaces + Turborepo; `apps/web` Next.js 16 (TS estrito, Tailwind 4, App Router) com i18n en/pt-br/es e páginas honestas mínimas; `packages/config`; `packages/contracts`; `packages/i18n`; CI; `.env.example` | lint, typecheck, test e build verdes; app roda sem credenciais |
+| 1.2 Design tokens + `packages/ui` base | tokens, Button, Input, URLInput, Badge, Alert, Skeleton com estados + testes + axe | checks verdes e axe sem violações |
+| 1.3 Observabilidade base | `packages/observability`, logger estruturado com redação, request-id, healthcheck | log sem campos proibidos |
 
 ## Onda 2 — Auth, workspaces e RLS
 
-2.1 Supabase local + migration inicial (profiles, workspaces, members, invites, feature_flags, app_settings) + RLS + testes de RLS no CI. 2.2 Auth SSR (@supabase/ssr): magic link + Google + senha opcional, sessão, perfil. 2.3 Dashboard autenticado mínimo + admin base (papel server-side).
+2.1 Supabase local + migration inicial (profiles, workspaces, members, invites, feature_flags, app_settings) + RLS + testes. 2.2 Auth SSR. 2.3 Dashboard autenticado mínimo + admin base.
 
 **Gate:** testes RLS A/B; nenhum acesso cruzado; service role fora do bundle.
 
-## Onda 3 — Billing, ledger, quota e governador de custo (pré-requisito absoluto de OpenAI real)
+## Onda 3 — Billing, ledger, quota e governador de custo
 
-3.1 Migrations: plans/prices, credit_accounts + ledger append-only, usage ledger, budget_periods/reservations, free_tier_configs, quota_counters + funções atômicas (`consume_quota`, `reserve_free_budget_and_enqueue`, `ledger_append`). 3.2 Testes de custo/abuso (duplo clique, reload, concorrência, orçamento encerrado, contador indisponível → fail-closed, free bloqueado + paid funcional). 3.3 Billing provider fake + webhook idempotente + admin de orçamento/kill switches. 3.4 Turnstile + rate limits.
+3.1 Migrations de planos, créditos, uso, orçamento e quota. 3.2 testes de custo/abuso. 3.3 provider fake/webhook idempotente/admin. 3.4 Turnstile + rate limits.
 
-**Gate:** todos os cenários de teste da seção 21.4 do prompt-mestre passando.
+**Gate:** cenários bloqueantes de custo e abuso passando antes de OpenAI ou pagamento real.
 
 ## Onda 4 — Upload e pipeline local (sem OpenAI real)
 
-4.1 StoragePort local + upload assinado com limites/MIME sniffing. 4.2 Fila: transcription_jobs + claim/heartbeat/complete/fail + worker Python em Docker com provider fake + FFmpeg (ffprobe, normalização). 4.3 UI de processamento (etapas reais, aria-live, cancelamento) + transcript fixture no editor mínimo.
+### 4.1 — Storage e upload
 
-**Gate:** upload→job→worker fake→transcript de ponta a ponta local; cleanup de temporários; testes de idempotência/cancelamento/timeout.
+StoragePort local/S3-compatible, upload assinado, quarentena, limites e MIME sniffing.
+
+### 4.2a — Fila de transcrição
+
+`transcription_jobs`, claim, heartbeat, transições, complete/fail, retries e idempotência.
+
+### 4.2b — Enfileiramento pós-upload
+
+Upload validado cria `transcription_job` real, protegido por quota de enqueue.
+
+### 4.2c — Worker Python + FFmpeg + provider fake
+
+Implementar o ciclo `claim_next_job` → adquirir mídia → `ffprobe` → reservar orçamento → pipeline fake → `complete_job`/`fail_job`.
+
+Além do aceite principal, o worker deve nascer compatível com renderização posterior, sem implementar o recurso completo:
+
+- runner/porta de FFmpeg testável;
+- progresso, heartbeat, timeout, cancelamento cooperativo e cleanup;
+- limites de CPU, memória, disco, duração e bytes;
+- telemetria comum de mídia: operação, duração, wall time, tentativas, bytes, codec, frame rate e resolução;
+- storage temporário capaz de receber futuros outputs;
+- fixture simples de inserção de legenda somente se não ampliar materialmente a fatia.
+
+Não entram aqui: editor de legendas, `render_jobs`, checkout, billing de renderização ou exportação MP4 para usuário.
+
+### 4.3 — UI de processamento
+
+Etapas reais, `aria-live`, cancelamento, transcript fixture e primeira RLS de leitura de jobs por workspace.
+
+**Gate:** upload → job → worker fake → transcript de ponta a ponta; cleanup; idempotência; cancelamento; timeout. As obrigações arquiteturais de mídia em `docs/CAPTIONED_VIDEO_EXPORT.md` precisam estar refletidas no desenho do worker.
 
 ## Onda 5 — OpenAI real
 
-Transcrição real atrás de `openai_enabled` (chaves free/paid separadas), chunking com overlap e reconciliação de offsets, timestamps, diarização opcional, telemetria de custo real, retries finitos, kill switches testados; AI_CALL_MATRIX/AI_COST_MODEL atualizados com medições.
-
-**Gate:** requisitos bloqueantes de `docs/PENDING_FEATURES.md` (ledger, quota durável, reserva, idempotência, rate limit, kill switch) já entregues nas Ondas 3–4.
+Transcrição real atrás de flags, chaves free/paid separadas, chunking, timestamps, diarização opcional, telemetria de custo, retries finitos e kill switches.
 
 ## Onda 6 — Editor e exports
 
-Player sincronizado, segmentos editáveis com versões, speakers, busca/substituição, autosave, atalhos, mobile; exports TXT/MD/DOCX/PDF/SRT/VTT/JSON com opções.
+### 6.1 — Editor de transcrição e player sincronizado
+
+Segmentos editáveis e versionados, speakers, busca/substituição, autosave, atalhos e mobile.
+
+### 6.2 — Exports de texto e arquivos de legenda
+
+TXT, Markdown, DOCX, PDF, SRT, VTT e JSON, com opções validadas e outputs temporários.
+
+### 6.3 — Prévia de legenda no vídeo
+
+Módulo visualmente secundário abaixo da transcrição; overlay no navegador; até aproximadamente 15 segundos; timestamps reais; presets, fontes, cores, posição e reset; mobile, acessibilidade, cache/idempotência e analytics sem PII. Não criar timeline ou editor avançado.
+
+### 6.4 — Renderização do vídeo completo
+
+Criar o domínio real de renderização somente aqui: `render_jobs` separado de `transcription_jobs`, presets/settings versionados, FFmpeg, MP4, áudio preservado, 720p/1080p conforme entitlement, progresso, cancelamento seguro, retry finito, reserva/reconciliação de custo, provider fake/entitlement de teste, URL assinada, TTL, cleanup e feature flags.
+
+A renderização paga permanece desligada até os gates da Onda 9. Schema significativo exige revisão explícita antes da migration.
 
 ## Onda 7 — Inteligência derivada
 
-Prompts versionados + Structured Outputs; resumo, capítulos, citações, tradução, formatos; quotas e caching; artefatos versionados.
+Prompts versionados + Structured Outputs; resumo, capítulos, citações, tradução, formatos; quotas, caching e artefatos versionados.
 
 ## Onda 8 — Link adapters
 
-Interface de adapter + suíte SSRF completa + metadados + legendas nativas; ativar somente fontes verificadas (pesquisa técnica/jurídica por plataforma); fallback upload; admin de saúde por plataforma.
+Interface de adapter + suíte SSRF completa + metadados + legendas nativas; fontes verificadas; fallback upload; admin de saúde por plataforma.
 
 ## Onda 9 — Monetização completa
 
-Single-job purchase, credit packs, assinaturas, checkout server-side (Stripe test), webhooks, invoices, refunds, upgrade flows.
+### 9.1 — Fundação de billing real
+
+Provider em test mode, checkout server-side, webhooks idempotentes, invoices, refunds, chargebacks e reconciliação.
+
+### 9.2 — Monetização da transcrição
+
+Conclusão avulsa, pacotes de créditos, assinaturas e retomada de job após pagamento.
+
+### 9.3 — Quote e compra avulsa de vídeo legendado
+
+Quote autoritativo no servidor baseado em duração, resolução, codec, frame rate, complexidade, processamento, storage, egress, retries, gateway, impostos e reserva operacional; política configurável sem valores finais hardcoded; compra/captura somente server-side; retomada idempotente do render.
+
+### 9.4 — Pacotes, planos e benefício gratuito de renderização
+
+Pacotes de minutos, franquia de plano, 1080p, presets extras, prioridade e lote nos planos adequados. Primeira exportação gratuita: uma vez por conta verificada, até 2 minutos, 720p, presets limitados, sujeita a entitlement durável, Turnstile, orçamento global, estados Normal/Economy/Restricted/Blocked, concorrência e sinais de abuso. IP é sinal secundário, nunca identidade única.
+
+### 9.5 — Analytics e experimentos comerciais
+
+Funil de preview → quote → checkout → compra → render → download; experimentos de preço sem deploy; comparação explícita entre minutos separados, créditos únicos e modelo combinado antes da decisão final.
 
 ## Onda 10 — Site público e SEO
 
-Homepage, features, pricing, API, soluções, ferramentas client-side, páginas de plataforma/resultado com gate de qualidade, blog/help, sitemaps/hreflang/schema, Lighthouse CI.
+Homepage, features, pricing, API, soluções, ferramentas, páginas de plataforma/resultado, blog/help, sitemaps/hreflang/schema e Lighthouse CI.
+
+A funcionalidade de vídeo legendado entra de forma secundária em features, pricing, FAQ, páginas de legendas/exports e ferramentas relevantes. Não alterar a tese principal da homepage e não usar “pronto para publicar”. Copy aceitável:
+
+> Exporte como texto, SRT, VTT ou vídeo com as legendas inseridas.
 
 ## Onda 11 — Equipes, compartilhamento, integrações e API pública
 
-Shares com token, teams/roles, API keys + `/api/v1` (docs/API.md), webhooks, primeiras integrações.
+Shares, teams/roles, API keys, `/api/v1`, webhooks e integrações. Exposição pública de renderização só depois de o domínio e billing estarem estáveis.
 
 ## Onda 12 — Hardening e lançamento
 
-Auditorias (segurança, acessibilidade, SEO, custo/abuso, carga), visual regression, runbook, launch checklist, staging.
+Auditorias de segurança, acessibilidade, SEO, custo/abuso e carga; visual regression; runbook; launch checklist; staging.
 
 ## Regras transversais
 
-- Uma onda pode começar antes da anterior estar 100% se (e só se) a dependência real já estiver entregue — a tabela acima nomeia os gates.
-- Toda fatia: typecheck + lint + testes + build verdes, docs e HANDOFF atualizados, PR independente.
-- OpenAI real, pagamentos reais, adapters públicos e DNS/produção: cada um tem gate explícito e autorização do dono.
+- Uma onda pode começar antes da anterior estar 100% somente quando a dependência real já estiver entregue.
+- Toda fatia: typecheck, lint, testes, build, docs e HANDOFF atualizados; PR independente.
+- OpenAI real, pagamentos reais, adapters públicos, DNS/produção e migrations significativas de renderização exigem gates e autorização/revisão explícita.
+- Exportação de vídeo legendado é P1 comercial; somente suas incompatibilidades arquiteturais são P0 durante a Onda 4.
