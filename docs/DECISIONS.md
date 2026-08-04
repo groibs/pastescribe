@@ -138,6 +138,13 @@ Este arquivo consolida as decisões ativas. Código e migrations vencem em caso 
 - **Status:** risco aceito temporariamente.
 - **Decisão:** sweeper automático espera scheduler real. Worker morto pode exigir intervenção até essa fatia.
 
+### 2026-08-04 — Onda 4.3b: upload real no dashboard, link continua desabilitado
+
+- **Status:** entregue.
+- **Decisão:** o card "Start transcribing" do dashboard replica a composição visual do Stitch (input de link + divisor "or" + dropzone), mas só a dropzone funciona de verdade — o input de link segue `disabled` com hint explicando que ainda não está disponível (mesmo padrão já usado na home desde a Onda 1, honesto sobre `source_kind=url` ser só estrutural). `UploadDropzone` (`apps/web/app/[locale]/app/_components/`) reusa o contrato já existente da 4.1/4.2b sem mudar nenhuma rota: `POST /api/uploads` (presigned) → `PUT` direto pro storage com progresso real (`XMLHttpRequest`, único jeito de ter evento de progresso de upload no browser) → `POST /api/uploads/[id]/complete` → redireciona pra `/{locale}/app/jobs/{job.id}` quando o job nasce. `apps/web/lib/uploads/limits.ts` (sem `server-only`) guarda `MAX_UPLOAD_SIZE_BYTES`/`ALLOWED_MEDIA_MIME_TYPES`/`validateSelectedFile` — o mesmo módulo que o servidor usa (via re-export em `constants.ts`, que continua `server-only`), pra client e servidor nunca divergirem sobre o limite. Validação client-side é só UX (feedback antes de gastar banda com um arquivo que o servidor rejeitaria); a fronteira de segurança real continua exclusivamente no servidor (`headObject` + MIME sniffing, fatia 4.1).
+- **Acessibilidade:** dropzone é um `<label>` nativo envolvendo um `<input type="file">` (`sr-only`, não `display:none`) — Tab alcança o input, Enter/Espaço abrem o seletor nativo do SO, sem JS custom pra teclado; foco visível via `focus-within` no label (o input em si fica fora da área visível). Progresso usa `role="progressbar"` com `aria-valuenow` real, mais texto (`Uploading…`/`Validating…`) — nunca só a barra. Erros usam o componente `Alert` já revisado (`role="alert"`), com a mensagem de texto explicando o problema, nunca só cor.
+- **O que NÃO pôde ser verificado ao vivo:** o fluxo completo de arrastar/soltar um arquivo real e ver o upload progredir — exigiria uma sessão autenticada real, indisponível neste sandbox (mesma limitação de sempre). Verificado ao vivo: a rota `/{locale}/app` continua redirecionando corretamente pra `/login` sem sessão, e o build/lint/typecheck de todas as três páginas de locale. A lógica pura de validação (`validateSelectedFile`) tem cobertura de teste completa.
+
 ### 2026-08-04 — Onda 4.3a: UI de status/cancelamento antes do editor
 
 - **Status:** entregue.

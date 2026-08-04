@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { Link as LinkIcon, Zap } from "lucide-react";
 
 import {
   LOCALE_BCP47,
@@ -9,10 +10,11 @@ import {
   getProcessingCopy,
   isLocale,
 } from "@pastescribe/i18n";
-import { Badge } from "@pastescribe/ui";
+import { Badge, TranscribeBar } from "@pastescribe/ui";
 
 import { signOutAction } from "../../actions/auth";
 import { SiteHeader } from "../../_components/SiteHeader";
+import { UploadDropzone } from "./_components/UploadDropzone";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 
 type PageProps = {
@@ -51,7 +53,7 @@ export default async function AppHomePage({ params }: PageProps) {
   const [{ data: workspace }, { data: jobs }] = await Promise.all([
     supabase
       .from("workspaces")
-      .select("name")
+      .select("id,name")
       .eq("created_by", user.id)
       .eq("is_personal", true)
       .maybeSingle(),
@@ -80,6 +82,37 @@ export default async function AppHomePage({ params }: PageProps) {
             {workspace?.name ?? dict.app.workspaceFallback}
           </p>
         </div>
+
+        {workspace?.id ? (
+          <section className="mt-8 rounded-xl border border-outline-variant bg-surface p-6">
+            <h2 className="mb-4 text-xl font-semibold text-on-surface">
+              {processingCopy.upload.heading}
+            </h2>
+
+            <TranscribeBar
+              label={processingCopy.upload.urlLabel}
+              hideLabel
+              placeholder={processingCopy.upload.urlPlaceholder}
+              buttonLabel={dict.home.transcribeButton}
+              buttonIcon={<Zap className="size-4" aria-hidden="true" />}
+              leadingIcon={<LinkIcon className="size-5" aria-hidden="true" />}
+              disabled
+            />
+            <p className="mb-4 mt-2 text-sm text-on-surface-variant">
+              {processingCopy.upload.urlDisabledHint}
+            </p>
+
+            <div className="flex items-center py-2">
+              <div className="flex-grow border-t border-outline-variant" />
+              <span className="mx-4 shrink-0 text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+                {processingCopy.upload.orDivider}
+              </span>
+              <div className="flex-grow border-t border-outline-variant" />
+            </div>
+
+            <UploadDropzone locale={locale} workspaceId={workspace.id} copy={processingCopy.upload} />
+          </section>
+        ) : null}
 
         <section className="mt-8" aria-labelledby="recent-jobs-heading">
           <h2 id="recent-jobs-heading" className="text-xl font-semibold text-on-surface">

@@ -42,6 +42,23 @@ export type ProcessingCopy = {
   recentJobsHeading: string;
   recentJobsEmpty: string;
   openJob: string;
+  upload: {
+    heading: string;
+    urlLabel: string;
+    urlPlaceholder: string;
+    urlDisabledHint: string;
+    orDivider: string;
+    dropzoneTitle: string;
+    dropzoneHint: string;
+    chooseFileButton: string;
+    replaceFileButton: string;
+    uploadingLabel: string;
+    validatingLabel: string;
+    errorTooLarge: string;
+    errorUnsupportedType: string;
+    errorGeneric: string;
+    errorQuotaExceeded: string;
+  };
 };
 
 const en: ProcessingCopy = {
@@ -105,6 +122,23 @@ const en: ProcessingCopy = {
   recentJobsHeading: "Recent transcriptions",
   recentJobsEmpty: "No transcription job has been created yet.",
   openJob: "Open status",
+  upload: {
+    heading: "Start transcribing",
+    urlLabel: "Paste a link",
+    urlPlaceholder: "Paste a YouTube, Vimeo, or Google Drive link here…",
+    urlDisabledHint: "Link transcription is not available yet — upload a file below instead.",
+    orDivider: "or",
+    dropzoneTitle: "Click to upload or drag and drop",
+    dropzoneHint: "Audio or video, max. {size}",
+    chooseFileButton: "Choose file",
+    replaceFileButton: "Choose a different file",
+    uploadingLabel: "Uploading…",
+    validatingLabel: "Validating…",
+    errorTooLarge: "This file is larger than the {size} limit.",
+    errorUnsupportedType: "This file type is not supported yet.",
+    errorGeneric: "The upload could not be completed. Try again.",
+    errorQuotaExceeded: "You've reached today's upload limit. Try again tomorrow.",
+  },
 };
 
 const ptBr: ProcessingCopy = {
@@ -168,6 +202,23 @@ const ptBr: ProcessingCopy = {
   recentJobsHeading: "Transcrições recentes",
   recentJobsEmpty: "Nenhum job de transcrição foi criado ainda.",
   openJob: "Abrir status",
+  upload: {
+    heading: "Começar a transcrever",
+    urlLabel: "Cole um link",
+    urlPlaceholder: "Cole aqui um link do YouTube, Vimeo ou Google Drive…",
+    urlDisabledHint: "Transcrição por link ainda não está disponível — envie um arquivo abaixo.",
+    orDivider: "ou",
+    dropzoneTitle: "Clique para enviar ou arraste e solte",
+    dropzoneHint: "Áudio ou vídeo, máx. {size}",
+    chooseFileButton: "Escolher arquivo",
+    replaceFileButton: "Escolher outro arquivo",
+    uploadingLabel: "Enviando…",
+    validatingLabel: "Validando…",
+    errorTooLarge: "Esse arquivo passa do limite de {size}.",
+    errorUnsupportedType: "Esse tipo de arquivo ainda não é suportado.",
+    errorGeneric: "Não foi possível concluir o envio. Tente de novo.",
+    errorQuotaExceeded: "Você atingiu o limite de envios de hoje. Tente de novo amanhã.",
+  },
 };
 
 const es: ProcessingCopy = {
@@ -231,6 +282,23 @@ const es: ProcessingCopy = {
   recentJobsHeading: "Transcripciones recientes",
   recentJobsEmpty: "Todavía no se creó ningún job de transcripción.",
   openJob: "Abrir estado",
+  upload: {
+    heading: "Empezar a transcribir",
+    urlLabel: "Pega un enlace",
+    urlPlaceholder: "Pega aquí un enlace de YouTube, Vimeo o Google Drive…",
+    urlDisabledHint: "La transcripción por enlace aún no está disponible — sube un archivo abajo.",
+    orDivider: "o",
+    dropzoneTitle: "Haz clic para subir o arrastra y suelta",
+    dropzoneHint: "Audio o video, máx. {size}",
+    chooseFileButton: "Elegir archivo",
+    replaceFileButton: "Elegir otro archivo",
+    uploadingLabel: "Subiendo…",
+    validatingLabel: "Validando…",
+    errorTooLarge: "Este archivo supera el límite de {size}.",
+    errorUnsupportedType: "Este tipo de archivo todavía no es compatible.",
+    errorGeneric: "No se pudo completar la subida. Intenta de nuevo.",
+    errorQuotaExceeded: "Alcanzaste el límite de subidas de hoy. Intenta de nuevo mañana.",
+  },
 };
 
 const COPY: Record<Locale, ProcessingCopy> = { en, "pt-br": ptBr, es };
