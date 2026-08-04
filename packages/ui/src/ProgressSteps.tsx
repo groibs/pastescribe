@@ -9,11 +9,40 @@ export type ProgressStep = {
 
 export type ProgressStepsStatus = "active" | "completed" | "error" | "cancelled";
 
+export type ProgressStepStateLabels = {
+  complete: string;
+  current: string;
+  pending: string;
+  error: string;
+  cancelled: string;
+};
+
 export interface ProgressStepsProps extends Omit<HTMLAttributes<HTMLOListElement>, "children"> {
   steps: readonly ProgressStep[];
   currentStepId: string;
   status?: ProgressStepsStatus;
   label: string;
+  stateLabels: ProgressStepStateLabels;
+}
+
+function getStateLabel({
+  isComplete,
+  isCurrent,
+  isError,
+  isCancelled,
+  labels,
+}: {
+  isComplete: boolean;
+  isCurrent: boolean;
+  isError: boolean;
+  isCancelled: boolean;
+  labels: ProgressStepStateLabels;
+}): string {
+  if (isComplete) return labels.complete;
+  if (isError) return labels.error;
+  if (isCancelled) return labels.cancelled;
+  if (isCurrent) return labels.current;
+  return labels.pending;
 }
 
 /**
@@ -25,6 +54,7 @@ export function ProgressSteps({
   currentStepId,
   status = "active",
   label,
+  stateLabels,
   className,
   ...props
 }: ProgressStepsProps) {
@@ -40,15 +70,13 @@ export function ProgressSteps({
         const isComplete = status === "completed" || index < currentIndex;
         const isError = isCurrent && status === "error";
         const isCancelled = isCurrent && status === "cancelled";
-        const stateLabel = isComplete
-          ? "Complete"
-          : isError
-            ? "Error"
-            : isCancelled
-              ? "Cancelled"
-              : isCurrent
-                ? "Current"
-                : "Pending";
+        const stateLabel = getStateLabel({
+          isComplete,
+          isCurrent,
+          isError,
+          isCancelled,
+          labels: stateLabels,
+        });
 
         return (
           <li
@@ -79,7 +107,12 @@ export function ProgressSteps({
               {isComplete ? "✓" : isError ? "!" : isCancelled ? "×" : index + 1}
             </span>
             <span className="pt-1.5">
-              <span className={cx("block text-sm font-semibold", isCurrent ? "text-on-surface" : "text-on-surface-variant")}>
+              <span
+                className={cx(
+                  "block text-sm font-semibold",
+                  isCurrent ? "text-on-surface" : "text-on-surface-variant"
+                )}
+              >
                 {step.label}
               </span>
               <span className="sr-only"> — {stateLabel}</span>
