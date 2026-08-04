@@ -6,16 +6,24 @@ from pathlib import Path
 
 
 class JobState(StrEnum):
+    CREATED = "created"
+    VALIDATING = "validating"
+    AWAITING_USER_CONFIRMATION = "awaiting_user_confirmation"
     QUEUED = "queued"
+    RESOLVING_METADATA = "resolving_metadata"
+    FETCHING_CAPTIONS = "fetching_captions"
     ACQUIRING_MEDIA = "acquiring_media"
+    EXTRACTING_AUDIO = "extracting_audio"
+    NORMALIZING_AUDIO = "normalizing_audio"
     TRANSCRIBING = "transcribing"
+    DIARIZING = "diarizing"
     POSTPROCESSING = "postprocessing"
     INDEXING = "indexing"
     COMPLETED = "completed"
-    AWAITING_USER_CONFIRMATION = "awaiting_user_confirmation"
+    FAILED = "failed"
     CANCEL_REQUESTED = "cancel_requested"
     CANCELLED = "cancelled"
-    FAILED = "failed"
+    EXPIRED = "expired"
 
 
 @dataclass(frozen=True, slots=True)
@@ -29,6 +37,9 @@ class TranscriptionJob:
     source_url: str | None
     retry_count: int
     max_retries: int
+    duration_seconds: int | None = None
+    budget_reservation_id: str | None = None
+    cancel_requested_at: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,3 +84,11 @@ class TranscriptFixture:
 class AcquiredMedia:
     path: Path
     bytes_downloaded: int
+
+
+@dataclass(frozen=True, slots=True)
+class CostEstimate:
+    duration_seconds: int
+    estimated_cost_micros_usd: int
+    reserved_cost_micros_usd: int
+    reserved_cost_cents_brl: int
