@@ -13,8 +13,8 @@ from pastescribe_worker.models import (
     MediaAsset,
     MediaProbe,
     TranscriptFixture,
-    TranscriptSegment,
     TranscriptionJob,
+    TranscriptSegment,
 )
 from pastescribe_worker.orchestrator import WorkerOrchestrator
 from pastescribe_worker.runtime import WorkerRuntime
