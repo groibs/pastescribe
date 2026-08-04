@@ -21,7 +21,10 @@ Saídas:
 - citações;
 - tradução;
 - TXT, Markdown, DOCX, PDF, SRT, VTT e JSON;
-- formatos derivados como artigo, roteiro, thread, carrossel e notas.
+- formatos derivados como artigo, roteiro, thread, carrossel e notas;
+- futuramente, exportação adicional do vídeo original com as legendas inseridas diretamente na imagem.
+
+A exportação de vídeo legendado é uma saída adicional e secundária. Não transforma o PasteScribe em editor de vídeo, ferramenta de repostagem ou plataforma de publicação.
 
 ## Proposta de valor
 
@@ -32,6 +35,12 @@ Em português:
 **Cole qualquer vídeo. Receba o texto pronto para usar.**
 
 A transcrição é a entrada. O valor do produto está em organizar, editar, transformar, exportar e reutilizar o conteúdo com rapidez.
+
+A formulação futura aceitável para a saída adicional é:
+
+> Exportar o vídeo com as legendas inseridas.
+
+Não usar “pronto para publicar”, “reposte este vídeo”, “conteúdo pronto para redes sociais” ou promessa de editor completo.
 
 ## Públicos principais
 
@@ -62,7 +71,8 @@ Não deve parecer:
 - template de dashboard;
 - ferramenta com estética clichê de IA;
 - serviço que promete compatibilidade impossível com “qualquer fonte” sem ressalvas;
-- plataforma baseada em scraping evasivo.
+- plataforma baseada em scraping evasivo;
+- editor de vídeo complexo ou suíte de publicação.
 
 ## Promessa operacional responsável
 
@@ -89,6 +99,8 @@ Não prometer acesso a:
 8. Usuário transforma, exporta ou compartilha.
 9. Pagamento aparece de forma contextual quando necessário.
 
+Depois que a transcrição estiver disponível, uma área secundária poderá permitir preview curto de legendas sobre o vídeo e oferecer a exportação completa do vídeo legendado. A transcrição continua sendo o foco da tela e a ação principal.
+
 ## Idiomas
 
 Arquitetura multilíngue desde o início. Lançamento inicial prioriza:
@@ -98,3 +110,10 @@ Arquitetura multilíngue desde o início. Lançamento inicial prioriza:
 - espanhol.
 
 Expansão posterior baseada em Search Console, conversão e capacidade de suporte.
+
+## Prioridade da exportação de vídeo legendado
+
+- **P1 comercial:** funcionalidade completa, por potencial de compra avulsa, pacotes e planos.
+- **P0 arquitetural durante a Onda 4:** apenas as primitivas do worker, storage, jobs longos, ledger de uso e telemetria que evitem incompatibilidade futura.
+
+Planejamento detalhado: `docs/CAPTIONED_VIDEO_EXPORT.md`.

@@ -1,134 +1,226 @@
 # Modelo de dados — PasteScribe
 
-Criado na Onda 0 em 2026-08-03. Este documento define o desenho; o estado real é sempre o das migrations em `supabase/migrations/`. Divergência entre este doc e migration = migration vence + atualizar este doc.
+Criado na Onda 0 em 2026-08-03. Este documento define o desenho; o estado real é sempre o das migrations em `supabase/migrations/`. Em divergência, migration vence e este arquivo deve ser corrigido.
 
-**Entregue:** identidade/workspaces (Onda 2, `0001`–`0002`), billing/ledger/orçamento/quota (Onda 3 fatia 3.1, `0003`–`0005`, ver §Funções SQL atômicas), `platform_admins` (Onda 3 fatia 3.3, `0006`), `media_assets` (Onda 4 fatia 4.1, `0007`) e a fila `transcription_jobs`/`job_steps` (Onda 4 fatia 4.2a, `0008`–`0010`). Ainda não entregue: `billing_customers`/`subscriptions`/`payment_events`, `abuse_signals`/`abuse_events` (sem lógica de abuso real para escrever neles ainda), `media_sources` (URL — depende de adapters de plataforma, Onda 8), `job_attempts`, o worker Python/FFmpeg e a UI de processamento (Onda 4.2b/4.2c/4.3).
+## Estado entregue
 
-Convenções: UUID (`gen_random_uuid()`) como PK, `created_at`/`updated_at` timestamptz, FKs com `on delete` explícito, índices para todo padrão de acesso real, RLS ativa em toda tabela exposta.
+Migrations `0001`–`0012` existem no repositório e foram testadas localmente/CI, mas ainda não foram aplicadas ao projeto Supabase real do dono.
 
-## Domínios e entidades
+Entregue no schema versionado:
 
-### Identidade e workspaces (Onda 2)
+- identidade e workspaces (`0001`–`0002`);
+- planos draft, créditos, usage ledger, orçamento e quotas (`0003`–`0005`);
+- `platform_admins` e flags iniciais (`0006`);
+- `media_assets` (`0007`);
+- `transcription_jobs`, `job_steps` e funções da fila (`0008`–`0012`).
 
-- `profiles` — 1:1 com `auth.users`; nome de exibição, locale, preferências. Sem e-mail duplicado (fica no Auth).
-- `workspaces` — todo usuário nasce com um workspace pessoal; times são workspaces com mais membros.
-- `workspace_members` — (workspace_id, user_id, role: owner|admin|editor|viewer), único por par.
-- `workspace_invites` — token hash, e-mail, papel, validade, status.
+Não entregue:
 
-### Planos e billing (Onda 3/9)
+- worker Python/FFmpeg;
+- transcripts/segmentos/editor;
+- billing customers/subscriptions/payment events;
+- abuse signals/events;
+- media sources/adapters;
+- exports persistidos;
+- qualquer tabela de preview ou renderização de vídeo legendado.
 
-- `plans` / `prices` — catálogo controlado pelo servidor; preços `draft` até aprovação; múltiplas moedas.
-- `billing_customers` — mapeia workspace → customer no provider; provider é coluna (`stripe`, `fake`).
-- `subscriptions` — estado espelhado do provider via webhook; nunca fonte primária de verdade de pagamento.
-- `payment_events` — todo webhook recebido, com `provider_event_id` único (idempotência/replay), payload mínimo, status de processamento.
+Convenções: UUID como PK; timestamps `timestamptz`; FKs com `on delete` explícito; índices por padrão de acesso real; RLS deny-by-default; schema somente via migration.
 
-### Créditos, uso e orçamento (Onda 3 fatia 3.1 — entregue) — coração financeiro
+## Identidade e workspaces
 
-- `plans` / `prices` — entregues nesta fatia com o catálogo draft (free/creator/pro, mesmos números do `packages/i18n`). `plans.is_purchasable` é o kill switch real: existir no catálogo não significa poder comprar — fica `false` até os preços serem aprovados (`docs/PASTESCRIBE_MONETIZATION.md`).
-- `credit_accounts` — 1 por workspace; `balance_seconds` é um **cache** mantido só por `ledger_append` (nunca por UPDATE direto) — a fonte de verdade é o histórico em `credit_ledger_entries`.
-- `credit_ledger_entries` — append-only. `kind: purchase|grant|reserve|capture|release|refund|adjust`, quantidade em segundos de mídia (unidade interna canônica: segundos; UI mostra minutos), referência ao job/pagamento, `idempotency_key` única. Correção = lançamento compensatório (`kind=adjust`), nunca update/delete.
-- `usage_ledger_entries` — custo real por operação: modelo, segundos processados, custo estimado/real em USD (micros, `bigint`, fiel à fatura real) e em BRL (centavos — moeda de planejamento do orçamento), origem free|paid, referência à reserva e ao workspace. Sem conteúdo. Escrita hoje só por `capture_budget_reservation`; a Onda 4/5 passa a alimentar via `complete_job`.
-- `budget_periods` — orçamento por envelope (`free_ai|ingestion|infra|reserve`, docs/AI_COST_MODEL.md §6) e período: teto, reservado, realizado, todos em centavos de BRL (moeda que o negócio realmente usa pra decidir o teto). Atualizado apenas por função atômica.
-- `budget_reservations` — reserva por identidade (`identity_key` opaco — hash/uuid decidido pela camada chamadora, não pelo banco): estimativa, estado `reserved|captured|released|expired`, expiração.
-- `free_tier_configs` — política vigente do gratuito, só por `max_seconds_total` (segundos — a única unidade realmente aplicada; o "custo máximo" do `docs/AI_COST_MODEL.md` §4 é ilustrativo, não uma segunda trava separada por imprecisão de centavos numa base tão pequena). Seed: `anonymous` (45s), `verified_email` (180s, não renovável), `native_caption` (0s, sem custo de IA). A copy pública lê daqui, nunca hardcoded.
-- `quota_counters` / `quota_consumption_entries` — contador durável por `bucket`+`window_key` opacos (usuário, IP, sessão, global, plataforma — quem/qual janela é decisão de quem chama, o banco só garante atomicidade) mais um log append-only para idempotência/auditoria de cada consumo individual.
-- `abuse_signals` / `abuse_events` — **ainda não entregue** (sem lógica de detecção de abuso real para escrever neles ainda; chega junto com a Onda 4/5 quando existir tráfego real pra detectar).
+- `profiles`: perfil 1:1 com `auth.users`; e-mail permanece no Auth.
+- `workspaces`: unidade de ownership/billing.
+- `workspace_members`: papel `owner|admin|editor|viewer` por workspace.
+- `workspace_invites`: convite com token hash, validade e status.
 
-### Jobs e mídia (Onda 4)
+## Catálogo, créditos, uso e orçamento
 
-- `transcription_jobs` — **entregue (Onda 4 fatia 4.2a, `0008`+`0011`)**. A fila e o estado. `workspace_id`, `created_by`, `source_kind: upload|url` (`url` é estrutural desde `0011` — coluna e check constraint existem, mas nenhum adapter/rota cria job assim ainda, Onda 8), `media_asset_id`/`source_url` (exatamente um dos dois preenchido, forçado por check constraint conforme `source_kind`), `state` (mesmo enum de 18 valores de `packages/contracts/src/job-states.ts` — única fonte canônica; o worker Python porta a mesma máquina), `priority`, `idempotency_key` (única), `lease_owner`/`lease_expires_at`/`heartbeat_at`, `retry_count`/`max_retries`, `next_attempt_at`, `dead_letter boolean`, `cancel_requested_at` (coluna existe; fluxo de cancelamento em si é Onda 4.3), `budget_reservation_id` (nulo até a duração real ser conhecida — ver `reserve_job_budget` abaixo), `duration_seconds` (a duração REAL, nunca declarada pelo client — populada pelo worker via `ffprobe`/metadata de plataforma), `error_code`/`error_detail` (sem conteúdo sensível). Índice parcial `(priority desc, next_attempt_at) where state='queued' and dead_letter=false` é o que sustenta o claim.
-- `job_steps` — **entregue (Onda 4 fatia 4.2a, `0008`)**. Transições auditáveis: `job_id`, `from_state` (nulo só na criação), `to_state`, `ator: web|worker|admin`, `detail`, `created_at`. Append-only.
-- `job_attempts` — **cortado desta fatia** (decisão em `docs/DECISIONS.md`): `job_steps` já audita cada transição com ator/timestamp; sem um consumidor real que precise de uma tabela por-tentativa separada ainda.
-- `media_sources` — URL normalizada (hash para dedup), plataforma, metadados públicos (título, duração, idioma, thumbnail). **Ainda não entregue** — só existe quando houver adapter de plataforma pra popular/consumir isso (Onda 8); `transcription_jobs.source_url` guarda só a URL crua por enquanto, sem normalização/dedup.
-- `media_assets` — **entregue (Onda 4 fatia 4.1, `0007`)**. Objeto no storage temporário: `workspace_id`, `created_by`, `storage_key` (UUID opaco, único — nunca o nome original), `original_filename` (só exibição, sanitizado, ≤255 chars), `status: pending_upload|validated|rejected|deleted`, `declared_content_type`/`declared_size_bytes` (o que o client alegou no início do upload) vs `actual_content_type`/`actual_size_bytes` (o que o servidor confirmou de verdade via `headObject` + MIME sniffing dos bytes reais — nunca confiar só no declarado), `rejection_reason`, `expires_at` (TTL de quarentena — limpeza automática é trabalho futuro), `validated_at`/`deleted_at`. RLS: `editor+` do workspace pode INSERT (com `created_by = auth.uid()` forçado via WITH CHECK), `viewer+` pode SELECT; **nenhuma policy de UPDATE/DELETE para `authenticated`** — toda transição de status (`validated`/`rejected`/`deleted`) é exclusiva de `service_role`, mesmo padrão de `platform_admins`. Checksum ainda não existe (não há uso real pra ele até dedup entrar em pauta).
-- `platform_adapters` — registro operacional por plataforma: flag, status (`active|degraded|disabled`), risco, última verificação.
+### Entregue
 
-### Transcript e derivados (Onda 4/6/7)
+- `plans` / `prices`: catálogo server-side; valores atuais são draft e `is_purchasable=false`.
+- `credit_accounts`: uma conta por workspace; saldo é cache derivado do ledger.
+- `credit_ledger_entries`: append-only; `purchase|grant|reserve|capture|release|refund|adjust`; correção é lançamento compensatório.
+- `usage_ledger_entries`: uso real sem conteúdo, com custo estimado/real e referência ao workspace/reserva.
+- `budget_periods`: teto, reservado e consumido por envelope/período.
+- `budget_reservations`: reserva expirável e idempotente por identidade opaca.
+- `free_tier_configs`: políticas atuais de degustação da transcrição.
+- `quota_counters` / `quota_consumption_entries`: quota durável com log append-only e idempotência.
 
-- `transcripts` — 1 por job concluído; idioma detectado/informado, fonte (`native_captions|ai`), versão bruta preservada.
-- `transcript_segments` — segmento com `start_ms`, `end_ms`, texto, `speaker_id`, índice; edições não destroem o original (versionamento).
-- `speakers` — rótulos por transcript, renomeáveis.
-- `transcript_versions` — snapshot por salvamento significativo (editor).
-- `generated_artifacts` / `artifact_versions` — resumo, capítulos, citações, tradução etc. como artefatos separados e versionados; nunca sobrescrevem transcript.
-- `exports` — pedidos de exportação: formato, opções, estado, objeto gerado (TTL).
-- `folders` / `folder_items`, `shares` (token hash, escopo read|edit, validade, revogação), `comments`/`notes`, `glossaries` / `glossary_terms`, `templates`.
+### Futuro — Onda 9
 
-### Plataforma e governança (transversal)
+- `billing_customers`;
+- `subscriptions`;
+- `payment_events` com provider event id único;
+- compras/entitlements necessários à transcrição e à renderização;
+- `abuse_signals` / `abuse_events` quando houver detector e consumidor reais.
 
-- `feature_flags` — flags dinâmicas de servidor (complementam as de build); fallback seguro = desligado.
-- `app_settings` — configuração operacional versionada (orçamentos, políticas do free, modelos ativos).
-- `model_configs` — modelos de IA por operação/ambiente (nome, provider, custo de referência, ativo) — nomes de modelo não ficam hardcoded no código.
-- `prompt_versions` — prompts versionados por operação, com hash e data de ativação.
-- `api_keys` (Onda 11) — hash da chave, prefixo exibível, scopes, última utilização, revogação.
-- `webhook_endpoints` / `webhook_deliveries` (Onda 11) — assinatura por segredo, retries com backoff, status.
-- `analytics_events` — catálogo fechado, pseudonimizado, com retenção curta (ver `docs/ANALYTICS_EVENTS.md`).
-- `audit_logs` — ações administrativas e sensíveis: ator, ação, alvo, timestamp, sem payload de conteúdo.
-- `platform_admins` — **entregue na Onda 3 fatia 3.3**: allowlist global (`user_id` → `auth.users`), não confundir com `workspace_members.role` (que é por workspace). É a base do `/admin` — "papel em banco" verificado só no servidor com `service_role`, nunca RLS no client (regra 6 abaixo). Sem seed: o primeiro admin é inserido manualmente (`docs/HANDOFF.md` tem o comando).
-- `integrations` (Onda 11), `seo_pages`/`seo_localizations` (Onda 10, se houver CMS), `support_cases` (opcional).
+Quote, preço, entitlement, saldo e captura são sempre autoridade do servidor.
 
-## Estratégia de RLS
+## Mídia e transcrição
 
-Princípios:
+### `media_assets` — entregue
 
-1. **Deny by default.** Tabela sem policy = inacessível para `anon`/`authenticated`.
-2. **Membership é a chave.** Quase toda policy deriva de `workspace_members` (função `is_workspace_member(workspace_id, min_role)` STABLE, `SECURITY DEFINER`, `search_path` fixo).
-3. **Papel controla escrita.** viewer lê; editor cria/edita conteúdo; admin gerencia membros; owner gerencia billing e exclusão.
-4. **Tabelas financeiras e de quota são só-servidor.** `credit_ledger_entries`, `usage_ledger_entries`, `budget_*`, `quota_*`, `payment_events`, `abuse_*`: `revoke all` de anon/authenticated; acesso apenas via funções `SECURITY DEFINER` ou service role. Leitura do próprio ledger pelo usuário passa por view/função filtrada. `plans`/`prices`/`credit_accounts` também nasceram só-servidor na fatia 3.1 (deny-by-default, regra 1) porque nenhuma UI os lê ainda — a policy de leitura pública de `plans`/`prices` (como `feature_flags`) e a de saldo do próprio workspace em `credit_accounts` entram na mesma PR que ligar o primeiro consumidor real.
-5. **Share por token nunca abre a tabela.** Acesso público de share resolve via função que valida token hash + validade + escopo e retorna somente o conteúdo compartilhado.
-6. **Admin não é RLS bypass no client.** Rotas admin usam service role no servidor após verificação de papel; nenhuma policy "is_admin" para acesso amplo via client.
-7. **Toda migration com RLS nasce com teste** (usuários A/B, papéis, negativas) — CI roda contra Postgres efêmero.
+Representa upload original temporário:
 
-## Funções SQL atômicas (contratos)
+- ownership por workspace/usuário;
+- `storage_key` opaca;
+- filename apenas para exibição, sanitizado;
+- status `pending_upload|validated|rejected|deleted`;
+- conteúdo/tamanho declarados separados dos valores reais;
+- motivo de rejeição, validade e timestamps;
+- RLS: membros podem criar/ler conforme papel; transições de status são server-only.
 
-**Entregues na Onda 2 fatia 2.1** (`supabase/migrations/0001_initial_schema.sql`, `0002_workspace_rls.sql`, testadas em `supabase/tests/`):
+`media_assets` não deve ser transformada prematuramente numa tabela genérica de qualquer output. Original, temporário de processamento e output final temporário têm ciclos de vida diferentes.
 
-| Função/trigger | Responsabilidade |
-|---|---|
-| `handle_new_user()` (trigger `after insert on auth.users`) | cria `profiles` + workspace pessoal atomicamente no signup |
-| `handle_new_workspace()` (trigger `after insert on public.workspaces`) | insere o criador como `owner` em `workspace_members` — vale para o workspace pessoal e para qualquer workspace de time criado depois |
-| `workspace_role_rank(role)` | ordena a hierarquia viewer<editor<admin<owner para comparação |
-| `is_workspace_member(workspace_id, min_role)` | `SECURITY DEFINER`/`STABLE`, único ponto de verdade sobre pertencimento e papel mínimo — toda policy de workspace* depende dela |
+### `transcription_jobs` — entregue
 
-**Entregues na Onda 3 fatia 3.1** (`supabase/migrations/0003`–`0005`, testadas em `supabase/tests/07`–`10`):
+Fila específica de transcrição:
 
-| Função | Responsabilidade | Chamada por |
-|---|---|---|
-| `consume_quota(bucket, window, units, limit, idempotency_key, ...)` | contador durável com janela, `FOR UPDATE`, idempotente | web (server) e worker |
-| `ledger_append(credit_account_id, kind, amount_seconds, idempotency_key, ...)` | lançamento de crédito idempotente; saldo em `credit_accounts` é cache mutado só aqui | web/worker |
-| `reserve_free_budget(envelope, period_start, period_end, identity_key, estimated_cost_cents_brl, idempotency_key, ...)` | reserva atômica contra `budget_periods`, `FOR UPDATE`, idempotente | web (server) |
-| `capture_budget_reservation(reservation_id, actual_cost_cents_brl, ...)` | reconciliação: reserved→consumed pelo custo real, devolve excedente, grava `usage_ledger_entries` | worker (via `complete_job`, Onda 4) |
-| `release_budget_reservation(reservation_id, reason)` | refund integral de reserva não capturada (job falhou/cancelou/expirou), idempotente | worker (via `fail_job`, Onda 4) |
+- `workspace_id`, `created_by`;
+- `source_kind: upload|url`;
+- exatamente um entre `media_asset_id` e `source_url`;
+- estado compatível com `packages/contracts/src/job-states.ts`;
+- prioridade e `idempotency_key` única;
+- lease/heartbeat;
+- retries, backoff, dead-letter e próxima tentativa;
+- cancel request estrutural;
+- reserva de orçamento opcional;
+- duração real descoberta pelo worker;
+- erros sem conteúdo sensível.
 
-**Entregues na Onda 4 fatia 4.2a** (`supabase/migrations/0008`–`0012`, testadas em `supabase/tests/13`–`14`):
+`source_kind=url` é apenas estrutural; nenhum adapter/rota real existe ainda.
 
-| Função | Responsabilidade | Chamada por |
-|---|---|---|
-| `enqueue_job(workspace_id, created_by, source_kind, idempotency_key, media_asset_id, source_url, priority, max_retries)` | valida a consistência de `source_kind` (upload: `media_asset` no workspace certo + `status='validated'`; url: só checa parâmetros, sem SSRF/adapter ainda) + `insert` do job em `'queued'` + `job_steps` inicial — **sem orçamento nenhum envolvido**, criar o job é determinístico e grátis | web (server, via admin client — chamada por `POST /api/uploads/[id]/complete` desde a fatia 4.2b, atrás de `consume_quota`) |
-| `claim_next_job(worker_id, capabilities, lease_seconds)` | `FOR UPDATE SKIP LOCKED` sobre `queued` já no horário, ordenado por prioridade; avança pro primeiro estado real do pipeline (`acquiring_media` pra upload, `resolving_metadata` pra url) e grava lease | worker |
-| `heartbeat_job(job_id, worker_id, lease_seconds)` | renova o lease — só o dono atual pode | worker |
-| `advance_job_step(job_id, worker_id, to_state, detail)` | transição intermediária dentro do pipeline (sem contenção — só o dono do lease chama), grava `job_steps` | worker |
-| `reserve_job_budget(job_id, worker_id, duration_seconds, envelope, period_start, period_end, identity_key, estimated_cost_cents_brl, idempotency_key, ...)` | chamada **só depois que a duração real é conhecida** (`ffprobe` pro upload, metadata da plataforma pro link — nunca antes, nunca declarada pelo client); grava `duration_seconds`; cabe no free → reserva e avança pra `transcribing`; excede → `awaiting_user_confirmation` (sem cobrar ninguém, solta o lease) | worker |
-| `complete_job(job_id, worker_id, model, seconds_processed, actual_cost_cents_brl, ...)` | transição final pra `completed` + chama `capture_budget_reservation`, idempotente | worker |
-| `fail_job(job_id, worker_id, error_code, error_detail)` | ainda há tentativa → volta pra `queued` com backoff exponencial (30s·2^n, teto 900s); esgotou → `failed` + `dead_letter` + `release_budget_reservation` (refund integral, só se já havia reserva) | worker |
+### `job_steps` — entregue
 
-Todas `service_role`-only, como as demais funções atômicas. `p_capabilities` existe na assinatura de `claim_next_job` (documentado desde a Onda 0) mas ainda não filtra nada — um único tipo de worker, sem capacidades diferenciadas pra rotear ainda.
+Histórico append-only de transições de `transcription_jobs`, com ator e timestamp.
 
-**Correção registrada em `docs/DECISIONS.md`:** a versão original desta fatia tinha uma única função (`reserve_free_budget_and_enqueue`) que criava o job E reservava orçamento no mesmo instante — presumindo que a duração já era conhecida ali, o que nunca é verdade (nem pra upload, nem pra link). Foi substituída por `enqueue_job` (sem custo) + `reserve_job_budget` (chamada só depois que o worker souber a duração real). `awaiting_user_confirmation` — estado que já existia na máquina desde a Onda 0 sem nenhum caminho real que o alcançasse — agora tem propósito: é onde um job cai quando excede o teto do free, aguardando um fluxo pago que ainda não existe (Onda 9).
+`job_attempts` não existe: será criado somente se um consumidor real exigir granularidade adicional além de `job_steps` + retry count.
 
-**Cortes aceitos desta fatia** (decisões completas em `docs/DECISIONS.md`): reap de lease expirado (worker morto sem chamar `fail_job` fica preso até um operador intervir ou um sweeper futuro existir — não há scheduler no projeto ainda); validação completa do grafo de transições de `packages/contracts` não é replicada em SQL (`advance_job_step`/`reserve_job_budget` só garantem lease válido + estado não-terminal; o worker Python é responsável por não pedir uma transição inválida); retomar um job em `awaiting_user_confirmation` depois que o usuário pagar/upgradar é **A confirmar** — não construído, já que não existe checkout pago ainda.
+## Funções SQL atômicas entregues
 
-**Planejadas para as próximas ondas:**
+### Identidade/RLS
 
-| Função | Responsabilidade | Chamada por |
-|---|---|---|
-| `apply_payment_event(...)` | idempotência por `provider_event_id`, concede créditos/entitlements | webhook handler |
+- `handle_new_user()`;
+- `handle_new_workspace()`;
+- `workspace_role_rank()`;
+- `is_workspace_member()`.
 
-Todas: `SECURITY DEFINER`, `set search_path = public`, `revoke` de public/anon/authenticated, `grant` só a `service_role` (exceto as que o usuário autenticado chama legitimamente, avaliadas caso a caso — nenhuma das entregues até agora tem essa exceção).
+### Quota, ledger e orçamento
+
+- `consume_quota()`;
+- `ledger_append()`;
+- `reserve_free_budget()`;
+- `capture_budget_reservation()`;
+- `release_budget_reservation()`.
+
+### Fila de transcrição
+
+- `enqueue_job()`: cria job sem reserva de IA;
+- `reserve_job_budget()`: após duração real, reserva free ou move para `awaiting_user_confirmation`;
+- `claim_next_job()`;
+- `heartbeat_job()`;
+- `advance_job_step()`;
+- `complete_job()`;
+- `fail_job()`.
+
+Todas as funções privilegiadas são `SECURITY DEFINER`, `search_path` fixo e executáveis apenas por `service_role` quando aplicável.
+
+## Transcript, derivados e exports — futuro
+
+- `transcripts`: resultado por job, fonte e idioma.
+- `transcript_segments`: `start_ms`, `end_ms`, texto e speaker.
+- `speakers`;
+- `transcript_versions`: edições não apagam o original.
+- `generated_artifacts` / `artifact_versions`;
+- `exports`: TXT/MD/DOCX/PDF/SRT/VTT/JSON, estado e output temporário.
+
+Essas tabelas entram com consumidor real nas Ondas 4.3, 6 e 7.
+
+## Vídeo com legendas inseridas — planejamento, sem schema
+
+### Decisão de domínio
+
+Não reutilizar nem alargar `transcription_jobs` para renderização.
+
+A Onda 6.4 deve avaliar e, após revisão explícita, criar `render_jobs` separados. Transcrição e renderização compartilham apenas primitivas de worker, storage, ledger de uso e observabilidade.
+
+Não criar tabela genérica de jobs nesta fase.
+
+### Entidades candidatas — somente quando necessárias
+
+Os nomes finais dependem da implementação e não são migrations aprovadas:
+
+- `caption_presets` ou catálogo equivalente: preset imutável por versão, defaults, capabilities e licença;
+- `render_jobs`: fila/estado/progresso/lease/retries/cancelamento/idempotência;
+- `render_outputs`: MP4 temporário, storage key, bytes, checksum, codec, resolução, duração, TTL e exclusão;
+- `render_quotes`: quote expirável, parâmetros autorizados e versão da política de preço;
+- `render_entitlements` ou estrutura equivalente: origem `free_once|single_purchase|pack|plan`;
+- `render_purchases`: vínculo auditável com evento confiável do provider, se não for absorvido pelo modelo geral de billing;
+- uso/reservas de renderização: categoria separada da transcrição, mesmo quando compartilhar tabelas gerais de ledger/orçamento.
+
+Não criar todas essas tabelas automaticamente. Cada uma exige consumidor, padrão de acesso, RLS, idempotência e teste na mesma fatia.
+
+### Schemas versionados obrigatórios
+
+`render_settings` não pode ser JSON arbitrário. Quando implementado, deve ser validado por schema versionado e estrito, contendo apenas:
+
+- `schema_version`;
+- `preset_id` + `preset_version`;
+- fonte allowlisted;
+- tamanho em faixa;
+- cores válidas;
+- posição enumerada;
+- fundo/contorno/sombra enumerados;
+- palavras máximas por bloco em faixa;
+- resolução/scaling autorizados.
+
+Preset é imutável por versão para reprodução, suporte, auditoria e retry.
+
+### Regras de integridade futuras
+
+- um render referencia mídia e versão do transcript existentes no mesmo workspace;
+- parâmetros efetivos são os do quote/entitlement validado no servidor;
+- mudança de duração, resolução ou settings após quote exige novo quote;
+- idempotency key impede duplicação por reload/retry;
+- output nunca é público por padrão;
+- download usa URL assinada curta e autorização atual;
+- TTL/cleanup são obrigatórios;
+- falha interna libera ou estorna reserva/crédito;
+- benefício gratuito é entitlement único e durável, não inferido só por IP.
+
+Planejamento completo: `docs/CAPTIONED_VIDEO_EXPORT.md`.
+
+## RLS
+
+1. deny-by-default;
+2. membership do workspace é a base;
+3. papel controla escrita;
+4. tabelas financeiras, quota, quote, entitlement, compra e uso são server-only;
+5. shares nunca abrem tabelas diretamente;
+6. admin usa service role depois de guard server-side;
+7. toda migration com RLS nasce com testes A/B e negativos.
+
+Tabelas futuras de renderização devem nascer sem policy de client até existir o primeiro consumidor real. A UI lê por rota/view/policy mínima definida na mesma PR.
 
 ## Retenção
 
-- mídia temporária: TTL horas–dias (config), exclusão automática (job de limpeza);
-- transcripts: persistem até exclusão pelo usuário; exclusão de conta → fila de deleção + tombstone em `audit_logs` sem conteúdo;
-- `analytics_events`: retenção 90 dias com poda na escrita;
-- exports: TTL curto;
-- backups: documentar limitação de propagação de deleção (LGPD/GDPR) na política de privacidade.
+- mídia original: temporária, TTL configurável e exclusão automática;
+- temporários do worker: cleanup ao final e sweeper para órfãos;
+- outputs de export/render: TTL curto, renovação/novo download conforme entitlement;
+- transcript: persiste até exclusão pelo usuário, sujeito à política de retenção;
+- analytics: retenção curta e sem conteúdo;
+- ledgers/audit: retenção compatível com obrigação financeira e operacional.
+
+Valores exatos entram em `app_settings` quando houver consumidor real; não hardcode em copy.
+
+## Regra para próximas migrations
+
+Antes de criar schema de renderização:
+
+1. revisar `docs/CAPTIONED_VIDEO_EXPORT.md` e `docs/DECISIONS.md`;
+2. confirmar a fatia 6.4 e o consumidor real;
+3. comparar `render_jobs` separado versus fila física compartilhada atrás de adapter;
+4. registrar estados, RLS, idempotência, TTL e autoridade financeira;
+5. atualizar tipos do banco no mesmo PR;
+6. adicionar testes pgTAP;
+7. obter revisão explícita antes de mudança arquitetural irreversível.
