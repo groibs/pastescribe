@@ -31,7 +31,7 @@ class PreparedFixture:
 
 
 class WorkerRuntime:
-    """Owns operation-scoped temp space and reusable media/provider ports."""
+    """Owns runtime state, shutdown signaling and local fixture work."""
 
     def __init__(
         self,
@@ -87,6 +87,9 @@ class WorkerRuntime:
 
     def request_shutdown(self) -> None:
         self._shutdown.set()
+
+    async def wait_for_shutdown(self) -> None:
+        await self._shutdown.wait()
 
     @property
     def shutdown_requested(self) -> bool:
